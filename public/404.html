@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <title>Roistat Dashboard redirect</title>
+    <script>
+      (function redirectToIndex() {
+        var redirectTo = location.origin + "/roistat-dashboard-tg/" + location.search + location.hash;
+        sessionStorage.redirect = location.href;
+        location.replace(redirectTo);
+      })();
+    </script>
+  </head>
+  <body></body>
+</html>

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Roistat Supabase Dashboard"
+  short_description: "Maintain this repo’s Roistat dashboard across React UI, Supabase reporting, auth, and GitHub Pages deployment"
+  default_prompt: "Use Roistat Supabase Dashboard to work on the React frontend, reporting SQL, Edge Functions, auth flow, or deployment setup in this repository."

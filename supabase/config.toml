@@ -1,0 +1,13 @@
+project_id = "nohpohynhcjyirqaxjax"
+
+[functions.admin-list-users]
+verify_jwt = true
+
+[functions.admin-invite-user]
+verify_jwt = true
+
+[functions.admin-set-role]
+verify_jwt = true
+
+[functions.admin-deactivate-user]
+verify_jwt = true
