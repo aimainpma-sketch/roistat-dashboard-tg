@@ -9,6 +9,7 @@ import {
   computeRejectionBreakdown,
   computeBrokerChannelCrosstab,
   computeLanguageSplit,
+  generateMarketingInsights,
 } from "@/features/marketing/lib/aggregations";
 import type { LanguageSegment, MarketingFilterState, Grain } from "@/types/dashboard";
 
@@ -83,6 +84,11 @@ export function useMarketingData(props?: { dateFrom?: string; dateTo?: string })
     [orders, spend, filters],
   );
 
+  const insights = useMemo(
+    () => generateMarketingInsights(channelSummaries, weeklyTrend),
+    [channelSummaries, weeklyTrend],
+  );
+
   const isLoading = ordersQuery.isLoading || spendQuery.isLoading;
 
   return {
@@ -90,12 +96,15 @@ export function useMarketingData(props?: { dateFrom?: string; dateTo?: string })
     setFilters,
     setLanguageFilter,
     setChannelFilter,
+    orders,
+    spend,
     channelSummaries,
     weeklyTrend,
     redFlags,
     rejectionBreakdown,
     brokerCrosstab,
     languageSplit,
+    insights,
     isLoading,
   };
 }

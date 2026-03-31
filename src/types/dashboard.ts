@@ -120,6 +120,10 @@ export type LanguageSegment = "RU" | "EN" | "unknown";
 export type LeadCategory = "A" | "B" | "C" | "none";
 
 export type EnrichedOrderFact = {
+  orderId: number;
+  orderName: string;
+  rawSource: string;
+  statusName: string;
   reportDate: string;
   channel: string;
   levelLabels: string[];
@@ -215,3 +219,17 @@ export type BrokerChannelCell = {
 export type MarketingFilterState = DashboardFilterState & {
   languageFilter: LanguageSegment | null;
 };
+
+export type SubSourceSummary = ChannelFunnelSummary & { subSource: string };
+
+export type MarketingInsight = {
+  severity: "red" | "yellow" | "green";
+  channel: string;
+  message: string;
+};
+
+export type DealPopupState = {
+  channel: string;
+  stage: string;
+  deals: EnrichedOrderFact[];
+} | null;

@@ -5,8 +5,10 @@ import type {
   ChannelFunnelSummary,
   DashboardFilterState,
   EnrichedOrderFact,
+  MarketingInsight,
   RedFlagItem,
   RejectionBreakdown,
+  SubSourceSummary,
   WeeklyTrend,
 } from "@/types/dashboard";
 
@@ -265,4 +267,161 @@ export function computeLanguageSplit(
   };
 
   return [make("RU"), make("EN")];
+}
+
+// ---------------------------------------------------------------------------
+// Sub-source summaries for expandable channel rows
+// ---------------------------------------------------------------------------
+export function computeSubSourceSummaries(
+  orders: EnrichedOrderFact[],
+  spend: ChannelDateSpend[],
+  filters: DashboardFilterState,
+  channel: string,
+): SubSourceSummary[] {
+  const scoped = orders.filter(
+    o => o.reportDate >= filters.dateFrom && o.reportDate <= filters.dateTo && o.channel === channel,
+  );
+
+  const subMap = new Map<string, Omit<SubSourceSummary, "cpl" | "cpMqlt" | "cpMqls" | "cpSql" | "cpMeet" | "crMqlt" | "crMqltToMqls" | "crMqlsToSql" | "crSqlToMeet" | "crMeetToOrder" | "romi">>();
+
+  for (const o of scoped) {
+    const src = o.rawSource || "unknown";
+    let s = subMap.get(src);
+    if (!s) {
+      s = { subSource: src, channel, leads: 0, mqlt: 0, mqls: 0, sql: 0, meetingSet: 0, meetingDone: 0, sales: 0, revenue: 0, grossMargin: 0, spend: 0, categoryA: 0, categoryB: 0, categoryC: 0, categoryNone: 0, leadsRu: 0, leadsEn: 0 };
+      subMap.set(src, s);
+    }
+    s.leads += 1;
+    if (o.isMqlt) s.mqlt += 1;
+    if (o.isMqls) s.mqls += 1;
+    if (o.isSql) s.sql += 1;
+    if (o.isMeetingSet) s.meetingSet += 1;
+    if (o.isMeetingDone) s.meetingDone += 1;
+    if (o.isSale) { s.sales += 1; s.revenue += o.price; s.grossMargin += o.profit; }
+    if (o.category === "A") s.categoryA += 1;
+    else if (o.category === "B") s.categoryB += 1;
+    else if (o.category === "C") s.categoryC += 1;
+    else s.categoryNone += 1;
+    if (o.language === "RU") s.leadsRu += 1;
+    else if (o.language === "EN") s.leadsEn += 1;
+  }
+
+  return [...subMap.values()].map(s => ({
+    ...s,
+    cpl: safeDivide(s.spend, s.leads),
+    cpMqlt: safeDivide(s.spend, s.mqlt),
+    cpMqls: safeDivide(s.spend, s.mqls),
+    cpSql: safeDivide(s.spend, s.sql),
+    cpMeet: safeDivide(s.spend, s.meetingDone),
+    crMqlt: pct(s.mqlt, s.leads),
+    crMqltToMqls: pct(s.mqls, s.mqlt),
+    crMqlsToSql: pct(s.sql, s.mqls),
+    crSqlToMeet: pct(s.meetingDone, s.sql),
+    crMeetToOrder: pct(s.sales, s.meetingDone),
+    romi: s.spend === 0 ? NaN : ((s.revenue - s.spend) / s.spend) * 100,
+  })).sort((a, b) => b.leads - a.leads);
+}
+
+// ---------------------------------------------------------------------------
+// Marketing Insights — deterministic signal generation
+// ---------------------------------------------------------------------------
+export function generateMarketingInsights(
+  summaries: ChannelFunnelSummary[],
+  weeklyTrend: WeeklyTrend[],
+): MarketingInsight[] {
+  const insights: MarketingInsight[] = [];
+  const withSpend = summaries.filter(ch => ch.spend > 0);
+  const withLeads = summaries.filter(ch => ch.leads > 0);
+
+  // Average CPL across channels that have both spend and leads
+  const totalSpend = withSpend.reduce((s, ch) => s + ch.spend, 0);
+  const totalLeads = withLeads.reduce((s, ch) => s + ch.leads, 0);
+  const avgCpl = totalLeads > 0 ? totalSpend / totalLeads : 0;
+
+  // Average CR MQLt
+  const totalMqlt = summaries.reduce((s, ch) => s + ch.mqlt, 0);
+  const avgCrMqlt = totalLeads > 0 ? (totalMqlt / totalLeads) * 100 : 0;
+
+  for (const ch of summaries) {
+    // Red: CPL > 2x average
+    if (ch.cpl > 0 && avgCpl > 0 && ch.cpl > avgCpl * 2) {
+      insights.push({
+        severity: "red",
+        channel: ch.channel,
+        message: `${ch.channel}: CPL $${Math.round(ch.cpl)} — в ${(ch.cpl / avgCpl).toFixed(1)}× дороже среднего ($${Math.round(avgCpl)})`,
+      });
+    }
+
+    // Red: Has leads but zero MQLt
+    if (ch.leads > 5 && ch.mqlt === 0) {
+      insights.push({
+        severity: "red",
+        channel: ch.channel,
+        message: `${ch.channel}: ${ch.leads} лидов, но 0 MQLt — проверить качество трафика`,
+      });
+    }
+
+    // Red: Many leads, zero sales
+    if (ch.leads > 20 && ch.sales === 0) {
+      insights.push({
+        severity: "red",
+        channel: ch.channel,
+        message: `${ch.channel}: ${ch.leads} лидов, но 0 продаж — воронка не доводит до сделки`,
+      });
+    }
+
+    // Yellow: Low CR MQLt
+    if (ch.leads > 10 && ch.crMqlt > 0 && ch.crMqlt < 5) {
+      insights.push({
+        severity: "yellow",
+        channel: ch.channel,
+        message: `${ch.channel}: CR MQLt ${ch.crMqlt.toFixed(1)}% (< 5%) — низкое качество лидов`,
+      });
+    }
+
+    // Yellow: CPL > 1.5x average (but not 2x — that's red)
+    if (ch.cpl > 0 && avgCpl > 0 && ch.cpl > avgCpl * 1.5 && ch.cpl <= avgCpl * 2) {
+      insights.push({
+        severity: "yellow",
+        channel: ch.channel,
+        message: `${ch.channel}: CPL $${Math.round(ch.cpl)} — в ${(ch.cpl / avgCpl).toFixed(1)}× выше среднего`,
+      });
+    }
+
+    // Green: Best ROMI
+    if (!Number.isNaN(ch.romi) && ch.romi > 200 && ch.sales > 0) {
+      insights.push({
+        severity: "green",
+        channel: ch.channel,
+        message: `${ch.channel}: ROMI ${Math.round(ch.romi)}% — отличная окупаемость`,
+      });
+    }
+
+    // Green: Cheapest leads
+    if (ch.cpl > 0 && avgCpl > 0 && ch.cpl < avgCpl * 0.5 && ch.leads > 5) {
+      insights.push({
+        severity: "green",
+        channel: ch.channel,
+        message: `${ch.channel}: CPL $${Math.round(ch.cpl)} — самые дешёвые лиды (среднее $${Math.round(avgCpl)})`,
+      });
+    }
+  }
+
+  // Weekly ROMI declining trend
+  if (weeklyTrend.length >= 3) {
+    const last3 = weeklyTrend.slice(-3);
+    if (last3[0].romi > last3[1].romi && last3[1].romi > last3[2].romi && last3[0].romi > 0) {
+      insights.push({
+        severity: "yellow",
+        channel: "Все каналы",
+        message: `ROMI падает 3 недели подряд: ${Math.round(last3[0].romi)}% → ${Math.round(last3[1].romi)}% → ${Math.round(last3[2].romi)}%`,
+      });
+    }
+  }
+
+  // Sort: red first, then yellow, then green
+  const order = { red: 0, yellow: 1, green: 2 };
+  insights.sort((a, b) => order[a.severity] - order[b.severity]);
+
+  return insights;
 }

@@ -18,6 +18,8 @@ import type {
 // Types for raw Supabase rows
 // ---------------------------------------------------------------------------
 type OrderRowWithCF = {
+  id: number;
+  name: string | null;
   date_create: string;
   source: string | null;
   status_name: string | null;
@@ -252,7 +254,7 @@ async function fetchEnrichedOrders(
 ): Promise<EnrichedOrderFact[]> {
   const rows = await fetchPublicRows<OrderRowWithCF>(
     "roistat_orders",
-    "date_create,source,status_name,status_type,price,profit,custom_fields",
+    "id,name,date_create,source,status_name,status_type,price,profit,custom_fields",
     [
       ["date_create", `gte.${startDate}`],
       ["date_create", `lte.${endDate}T23:59:59`],
@@ -271,6 +273,10 @@ async function fetchEnrichedOrders(
 
     const channel = deriveChannel(row.source, fields);
     return {
+      orderId: row.id,
+      orderName: row.name ?? "",
+      rawSource: row.source ?? "",
+      statusName: cleanLabel(row.status_name),
       reportDate: row.date_create.slice(0, 10),
       channel,
       levelLabels: [channel],
