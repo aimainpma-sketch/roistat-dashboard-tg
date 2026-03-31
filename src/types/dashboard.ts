@@ -111,3 +111,107 @@ export type AdminUser = {
   status: "active" | "invited" | "disabled";
   invitedAt: string;
 };
+
+// ---------------------------------------------------------------------------
+// Marketing & Lead Quality dashboards
+// ---------------------------------------------------------------------------
+
+export type LanguageSegment = "RU" | "EN" | "unknown";
+export type LeadCategory = "A" | "B" | "C" | "none";
+
+export type EnrichedOrderFact = {
+  reportDate: string;
+  channel: string;
+  levelLabels: string[];
+  language: LanguageSegment;
+  category: LeadCategory;
+  manager: string;
+  isMqlt: boolean;
+  isMqls: boolean;
+  isSql: boolean;
+  isMeetingSet: boolean;
+  isMeetingDone: boolean;
+  isSale: boolean;
+  price: number;
+  profit: number;
+  rejectionReason: string | null;
+  isQualifiedRejection: boolean;
+};
+
+export type ChannelDateSpend = {
+  reportDate: string;
+  channel: string;
+  spend: number;
+};
+
+export type ChannelFunnelSummary = {
+  channel: string;
+  leads: number;
+  mqlt: number;
+  mqls: number;
+  sql: number;
+  meetingSet: number;
+  meetingDone: number;
+  sales: number;
+  revenue: number;
+  grossMargin: number;
+  spend: number;
+  cpl: number;
+  cpMqlt: number;
+  cpMqls: number;
+  cpSql: number;
+  cpMeet: number;
+  crMqlt: number;
+  crMqltToMqls: number;
+  crMqlsToSql: number;
+  crSqlToMeet: number;
+  crMeetToOrder: number;
+  romi: number;
+  categoryA: number;
+  categoryB: number;
+  categoryC: number;
+  categoryNone: number;
+  leadsRu: number;
+  leadsEn: number;
+};
+
+export type WeeklyTrend = {
+  weekStart: string;
+  weekLabel: string;
+  spend: number;
+  leads: number;
+  mqlt: number;
+  sales: number;
+  revenue: number;
+  romi: number;
+};
+
+export type RedFlagItem = {
+  channel: string;
+  source: string;
+  spend: number;
+  leads: number;
+  mqlt: number;
+  reason: string;
+};
+
+export type RejectionBreakdown = {
+  channel: string;
+  qualifiedCount: number;
+  unqualifiedCount: number;
+  reasons: { reason: string; count: number }[];
+};
+
+export type BrokerChannelCell = {
+  manager: string;
+  channel: string;
+  leads: number;
+  mqls: number;
+  meetingDone: number;
+  sales: number;
+  crMeetToOrder: number;
+};
+
+export type MarketingFilterState = DashboardFilterState & {
+  languageFilter: LanguageSegment | null;
+};

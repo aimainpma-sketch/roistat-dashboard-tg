@@ -4,6 +4,8 @@ import { ProtectedRoute } from "@/features/auth/ProtectedRoute";
 import { LoginPage } from "@/features/auth/LoginPage";
 import { AuthCallbackPage } from "@/features/auth/AuthCallbackPage";
 import { DashboardPage } from "@/features/dashboard/DashboardPage";
+import { MarketingDashboardPage } from "@/features/marketing/MarketingDashboardPage";
+import { LeadQualityDashboardPage } from "@/features/lead-quality/LeadQualityDashboardPage";
 import { AdminUsersPage } from "@/features/admin/AdminUsersPage";
 
 export const router = createBrowserRouter(
@@ -26,6 +28,14 @@ export const router = createBrowserRouter(
         {
           path: "/dashboard",
           element: <DashboardPage />,
+        },
+        {
+          path: "/marketing",
+          element: <MarketingDashboardPage />,
+        },
+        {
+          path: "/lead-quality",
+          element: <LeadQualityDashboardPage />,
         },
         {
           path: "/admin/users",

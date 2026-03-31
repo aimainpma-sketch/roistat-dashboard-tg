@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Link, NavLink } from "react-router-dom";
-import { LayoutDashboard, LogOut, Moon, Settings2, Shield, Sun } from "lucide-react";
+import { LayoutDashboard, LogOut, Moon, Settings2, Shield, Sun, TrendingUp, Users } from "lucide-react";
 import { useAuth } from "@/features/auth/AuthProvider";
 import { useTheme } from "@/lib/useTheme";
 import { cn } from "@/lib/utils";
@@ -42,6 +42,16 @@ export function AppShell({
               to="/dashboard"
               label="Дашборд"
               icon={<LayoutDashboard className="size-4" />}
+            />
+            <NavItem
+              to="/marketing"
+              label="Маркетинг"
+              icon={<TrendingUp className="size-4" />}
+            />
+            <NavItem
+              to="/lead-quality"
+              label="Качество лидов"
+              icon={<Users className="size-4" />}
             />
             {role === "admin" ? (
               <NavItem
