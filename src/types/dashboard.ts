@@ -165,10 +165,13 @@ export type ChannelFunnelSummary = {
   cpMqls: number;
   cpSql: number;
   cpMeet: number;
+  cpMeetSet: number;
   crMqlt: number;
   crMqltToMqls: number;
   crMqlsToSql: number;
   crSqlToMeet: number;
+  crSqlToMeetSet: number;
+  crMeetSetToMeetDone: number;
   crMeetToOrder: number;
   romi: number;
   categoryA: number;

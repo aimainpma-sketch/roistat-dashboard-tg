@@ -12,11 +12,11 @@ import type {
   WeeklyTrend,
 } from "@/types/dashboard";
 
-function safeDivide(a: number, b: number): number {
+export function safeDivide(a: number, b: number): number {
   return b === 0 ? 0 : a / b;
 }
 
-function pct(a: number, b: number): number {
+export function pct(a: number, b: number): number {
   return b === 0 ? 0 : (a / b) * 100;
 }
 
@@ -30,7 +30,7 @@ export function computeChannelFunnelSummaries(
 ): ChannelFunnelSummary[] {
   const scoped = orders.filter(o => o.reportDate >= filters.dateFrom && o.reportDate <= filters.dateTo);
 
-  const channelMap = new Map<string, Omit<ChannelFunnelSummary, "cpl" | "cpMqlt" | "cpMqls" | "cpSql" | "cpMeet" | "crMqlt" | "crMqltToMqls" | "crMqlsToSql" | "crSqlToMeet" | "crMeetToOrder" | "romi">>();
+  const channelMap = new Map<string, Omit<ChannelFunnelSummary, "cpl" | "cpMqlt" | "cpMqls" | "cpSql" | "cpMeet" | "cpMeetSet" | "crMqlt" | "crMqltToMqls" | "crMqlsToSql" | "crSqlToMeet" | "crSqlToMeetSet" | "crMeetSetToMeetDone" | "crMeetToOrder" | "romi">>();
 
   for (const o of scoped) {
     let ch = channelMap.get(o.channel);
@@ -70,10 +70,13 @@ export function computeChannelFunnelSummaries(
     cpMqls: safeDivide(ch.spend, ch.mqls),
     cpSql: safeDivide(ch.spend, ch.sql),
     cpMeet: safeDivide(ch.spend, ch.meetingDone),
+    cpMeetSet: safeDivide(ch.spend, ch.meetingSet),
     crMqlt: pct(ch.mqlt, ch.leads),
     crMqltToMqls: pct(ch.mqls, ch.mqlt),
     crMqlsToSql: pct(ch.sql, ch.mqls),
     crSqlToMeet: pct(ch.meetingDone, ch.sql),
+    crSqlToMeetSet: pct(ch.meetingSet, ch.sql),
+    crMeetSetToMeetDone: pct(ch.meetingDone, ch.meetingSet),
     crMeetToOrder: pct(ch.sales, ch.meetingDone),
     romi: ch.spend === 0 ? NaN : ((ch.revenue - ch.spend) / ch.spend) * 100,
   })).sort((a, b) => b.leads - a.leads);
@@ -282,7 +285,7 @@ export function computeSubSourceSummaries(
     o => o.reportDate >= filters.dateFrom && o.reportDate <= filters.dateTo && o.channel === channel,
   );
 
-  const subMap = new Map<string, Omit<SubSourceSummary, "cpl" | "cpMqlt" | "cpMqls" | "cpSql" | "cpMeet" | "crMqlt" | "crMqltToMqls" | "crMqlsToSql" | "crSqlToMeet" | "crMeetToOrder" | "romi">>();
+  const subMap = new Map<string, Omit<SubSourceSummary, "cpl" | "cpMqlt" | "cpMqls" | "cpSql" | "cpMeet" | "cpMeetSet" | "crMqlt" | "crMqltToMqls" | "crMqlsToSql" | "crSqlToMeet" | "crSqlToMeetSet" | "crMeetSetToMeetDone" | "crMeetToOrder" | "romi">>();
 
   for (const o of scoped) {
     const src = o.rawSource || "unknown";
@@ -313,10 +316,13 @@ export function computeSubSourceSummaries(
     cpMqls: safeDivide(s.spend, s.mqls),
     cpSql: safeDivide(s.spend, s.sql),
     cpMeet: safeDivide(s.spend, s.meetingDone),
+    cpMeetSet: safeDivide(s.spend, s.meetingSet),
     crMqlt: pct(s.mqlt, s.leads),
     crMqltToMqls: pct(s.mqls, s.mqlt),
     crMqlsToSql: pct(s.sql, s.mqls),
     crSqlToMeet: pct(s.meetingDone, s.sql),
+    crSqlToMeetSet: pct(s.meetingSet, s.sql),
+    crMeetSetToMeetDone: pct(s.meetingDone, s.meetingSet),
     crMeetToOrder: pct(s.sales, s.meetingDone),
     romi: s.spend === 0 ? NaN : ((s.revenue - s.spend) / s.spend) * 100,
   })).sort((a, b) => b.leads - a.leads);
@@ -333,49 +339,22 @@ export function generateMarketingInsights(
   const withSpend = summaries.filter(ch => ch.spend > 0);
   const withLeads = summaries.filter(ch => ch.leads > 0);
 
-  // Average CPL across channels that have both spend and leads
+  // Portfolio averages for between-channel comparison
   const totalSpend = withSpend.reduce((s, ch) => s + ch.spend, 0);
   const totalLeads = withLeads.reduce((s, ch) => s + ch.leads, 0);
   const avgCpl = totalLeads > 0 ? totalSpend / totalLeads : 0;
-
-  // Average CR MQLt
   const totalMqlt = summaries.reduce((s, ch) => s + ch.mqlt, 0);
   const avgCrMqlt = totalLeads > 0 ? (totalMqlt / totalLeads) * 100 : 0;
 
   for (const ch of summaries) {
+    // === BETWEEN-CHANNEL: cost & rate metrics vs portfolio average ===
+
     // Red: CPL > 2x average
     if (ch.cpl > 0 && avgCpl > 0 && ch.cpl > avgCpl * 2) {
       insights.push({
         severity: "red",
         channel: ch.channel,
         message: `${ch.channel}: CPL $${Math.round(ch.cpl)} — в ${(ch.cpl / avgCpl).toFixed(1)}× дороже среднего ($${Math.round(avgCpl)})`,
-      });
-    }
-
-    // Red: Has leads but zero MQLt
-    if (ch.leads > 5 && ch.mqlt === 0) {
-      insights.push({
-        severity: "red",
-        channel: ch.channel,
-        message: `${ch.channel}: ${ch.leads} лидов, но 0 MQLt — проверить качество трафика`,
-      });
-    }
-
-    // Red: Many leads, zero sales
-    if (ch.leads > 20 && ch.sales === 0) {
-      insights.push({
-        severity: "red",
-        channel: ch.channel,
-        message: `${ch.channel}: ${ch.leads} лидов, но 0 продаж — воронка не доводит до сделки`,
-      });
-    }
-
-    // Yellow: Low CR MQLt
-    if (ch.leads > 10 && ch.crMqlt > 0 && ch.crMqlt < 5) {
-      insights.push({
-        severity: "yellow",
-        channel: ch.channel,
-        message: `${ch.channel}: CR MQLt ${ch.crMqlt.toFixed(1)}% (< 5%) — низкое качество лидов`,
       });
     }
 
@@ -388,12 +367,12 @@ export function generateMarketingInsights(
       });
     }
 
-    // Green: Best ROMI
-    if (!Number.isNaN(ch.romi) && ch.romi > 200 && ch.sales > 0) {
+    // Yellow: CR MQLt below half of portfolio average
+    if (ch.leads > 10 && avgCrMqlt > 0 && ch.crMqlt > 0 && ch.crMqlt < avgCrMqlt * 0.5) {
       insights.push({
-        severity: "green",
+        severity: "yellow",
         channel: ch.channel,
-        message: `${ch.channel}: ROMI ${Math.round(ch.romi)}% — отличная окупаемость`,
+        message: `${ch.channel}: CR MQLt ${ch.crMqlt.toFixed(1)}% — ниже половины среднего (${avgCrMqlt.toFixed(1)}%)`,
       });
     }
 
@@ -405,16 +384,56 @@ export function generateMarketingInsights(
         message: `${ch.channel}: CPL $${Math.round(ch.cpl)} — самые дешёвые лиды (среднее $${Math.round(avgCpl)})`,
       });
     }
+
+    // === WITHIN-CHANNEL: count anomalies ===
+
+    // Red: Has leads but zero MQLt
+    if (ch.leads > 5 && ch.mqlt === 0) {
+      insights.push({
+        severity: "red",
+        channel: ch.channel,
+        message: `${ch.channel}: ${ch.leads} лидов, но 0 MQLt — проверить качество трафика`,
+      });
+    }
+
+    // Yellow: Has MQLt but zero MQLs (all fail qualification)
+    if (ch.mqlt > 3 && ch.mqls === 0) {
+      insights.push({
+        severity: "yellow",
+        channel: ch.channel,
+        message: `${ch.channel}: ${ch.mqlt} MQLt, но 0 MQLs — все отсеиваются на квалификации`,
+      });
+    }
+
+    // Yellow: Has SQL but zero meetings set
+    if (ch.sql > 2 && ch.meetingSet === 0) {
+      insights.push({
+        severity: "yellow",
+        channel: ch.channel,
+        message: `${ch.channel}: ${ch.sql} SQL, но 0 встреч назначено — воронка стопорится`,
+      });
+    }
+
+    // === REVENUE: high threshold, cautious ===
+
+    // Green: Excellent ROMI (only with 2+ sales to avoid single-deal distortion)
+    if (!Number.isNaN(ch.romi) && ch.romi > 300 && ch.sales >= 2) {
+      insights.push({
+        severity: "green",
+        channel: ch.channel,
+        message: `${ch.channel}: ROMI ${Math.round(ch.romi)}% (${ch.sales} продаж) — отличная окупаемость`,
+      });
+    }
   }
 
-  // Weekly ROMI declining trend
+  // Weekly ROMI declining trend — informational only (green)
   if (weeklyTrend.length >= 3) {
     const last3 = weeklyTrend.slice(-3);
     if (last3[0].romi > last3[1].romi && last3[1].romi > last3[2].romi && last3[0].romi > 0) {
       insights.push({
-        severity: "yellow",
+        severity: "green",
         channel: "Все каналы",
-        message: `ROMI падает 3 недели подряд: ${Math.round(last3[0].romi)}% → ${Math.round(last3[1].romi)}% → ${Math.round(last3[2].romi)}%`,
+        message: `ROMI снижается 3 недели: ${Math.round(last3[0].romi)}% → ${Math.round(last3[1].romi)}% → ${Math.round(last3[2].romi)}%. При малом числе продаж колебания нормальны`,
       });
     }
   }

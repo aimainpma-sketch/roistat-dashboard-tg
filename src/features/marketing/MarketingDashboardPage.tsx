@@ -4,7 +4,8 @@ import { AppShell } from "@/components/AppShell";
 import { WidgetCard } from "@/components/widgets/WidgetCard";
 import { DateRangeToolbar } from "@/features/dashboard/components/DateRangeToolbar";
 import { useMarketingData } from "@/features/marketing/hooks/useMarketingData";
-import { computeSubSourceSummaries } from "@/features/marketing/lib/aggregations";
+import { computeSubSourceSummaries, safeDivide, pct } from "@/features/marketing/lib/aggregations";
+import { FunnelStripBar } from "@/features/marketing/components/FunnelStripBar";
 import { useCurrentRole } from "@/features/dashboard/hooks/useDashboardData";
 import { formatRangeLabel } from "@/lib/format";
 import { env } from "@/lib/env";
@@ -100,19 +101,30 @@ export function MarketingDashboardPage() {
     setDealPopup({ channel, stage: STAGE_LABELS[stage], deals });
   };
 
-  const totals = channelSummaries.reduce(
-    (acc, ch) => ({
-      spend: acc.spend + ch.spend,
-      leads: acc.leads + ch.leads,
-      mqlt: acc.mqlt + ch.mqlt,
-      sales: acc.sales + ch.sales,
-      revenue: acc.revenue + ch.revenue,
-    }),
-    { spend: 0, leads: 0, mqlt: 0, sales: 0, revenue: 0 },
-  );
-
-  const avgCpl = totals.leads > 0 ? totals.spend / totals.leads : 0;
-  const avgRomi = totals.spend > 0 ? ((totals.revenue - totals.spend) / totals.spend) * 100 : 0;
+  const totals = useMemo(() => {
+    const t = { spend: 0, leads: 0, mqlt: 0, mqls: 0, sql: 0, meetingSet: 0, meetingDone: 0, sales: 0, revenue: 0, grossMargin: 0 };
+    channelSummaries.forEach(ch => {
+      t.spend += ch.spend; t.leads += ch.leads; t.mqlt += ch.mqlt; t.mqls += ch.mqls;
+      t.sql += ch.sql; t.meetingSet += ch.meetingSet; t.meetingDone += ch.meetingDone;
+      t.sales += ch.sales; t.revenue += ch.revenue; t.grossMargin += ch.grossMargin;
+    });
+    return {
+      ...t,
+      cpl: safeDivide(t.spend, t.leads),
+      cpMqlt: safeDivide(t.spend, t.mqlt),
+      cpMqls: safeDivide(t.spend, t.mqls),
+      cpSql: safeDivide(t.spend, t.sql),
+      cpMeetSet: safeDivide(t.spend, t.meetingSet),
+      cpMeetDone: safeDivide(t.spend, t.meetingDone),
+      crMqlt: pct(t.mqlt, t.leads),
+      crMqltToMqls: pct(t.mqls, t.mqlt),
+      crMqlsToSql: pct(t.sql, t.mqls),
+      crSqlToMeetSet: pct(t.meetingSet, t.sql),
+      crMeetSetToMeetDone: pct(t.meetingDone, t.meetingSet),
+      crMeetToOrder: pct(t.sales, t.meetingDone),
+      romi: t.spend > 0 ? ((t.revenue - t.spend) / t.spend) * 100 : 0,
+    };
+  }, [channelSummaries]);
 
   const allRejections = rejectionBreakdown.reduce(
     (acc, ch) => {
@@ -168,15 +180,8 @@ export function MarketingDashboardPage() {
         </div>
       ) : (
         <div className="space-y-6">
-          {/* KPI Strip */}
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-            <KpiCard label="Расход" value={`$${Math.round(totals.spend).toLocaleString()}`} />
-            <KpiCard label="Лиды" value={totals.leads.toLocaleString()} />
-            <KpiCard label="MQLt" value={totals.mqlt.toLocaleString()} />
-            <KpiCard label="Продажи" value={totals.sales.toLocaleString()} />
-            <KpiCard label="CPL" value={`$${Math.round(avgCpl)}`} />
-            <KpiCard label="ROMI" value={`${Math.round(avgRomi)}%`} />
-          </div>
+          {/* Full Funnel Strip */}
+          <FunnelStripBar totals={totals} />
 
           {/* Insights & Signals */}
           {insights.length > 0 && (
@@ -553,14 +558,3 @@ function DealRow({ deal, crmBase }: { deal: EnrichedOrderFact; crmBase: string |
   return inner;
 }
 
-// ---------------------------------------------------------------------------
-// KPI Card
-// ---------------------------------------------------------------------------
-function KpiCard({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="glass rounded-2xl border border-white/10 px-4 py-3">
-      <div className="truncate text-xs text-slate-400">{label}</div>
-      <div className="mt-1 truncate text-xl font-semibold text-white">{value}</div>
-    </div>
-  );
-}
