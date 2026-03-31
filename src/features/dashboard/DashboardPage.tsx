@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, startTransition } from "react";
-import { Link } from "react-router-dom";
+import { addDays } from "date-fns";
 import { Settings2 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { DateRangeToolbar } from "@/features/dashboard/components/DateRangeToolbar";
@@ -13,16 +13,16 @@ import { formatRangeLabel } from "@/lib/format";
 import { saveDashboardView, saveDimensionLevels } from "@/services/dashboardRepository";
 import type { DashboardFilterState, DashboardView, DimensionLevel } from "@/types/dashboard";
 
-const initialFilters: DashboardFilterState = {
-  dateFrom: "2026-03-23",
-  dateTo: "2026-03-29",
-  grain: "day",
-  channelFilter: null,
-};
+function getDefaultFilters(): DashboardFilterState {
+  const today = new Date();
+  const dateTo = today.toISOString().slice(0, 10);
+  const dateFrom = addDays(today, -29).toISOString().slice(0, 10);
+  return { dateFrom, dateTo, grain: "day", channelFilter: null };
+}
 
 export function DashboardPage() {
   const { user } = useAuth();
-  const [filters, setFilters] = useState<DashboardFilterState>(initialFilters);
+  const [filters, setFilters] = useState<DashboardFilterState>(getDefaultFilters);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [levels, setLevels] = useState<DimensionLevel[]>([]);
   const [views, setViews] = useState<DashboardView[]>([]);
@@ -94,40 +94,18 @@ export function DashboardPage() {
       }
     >
       <div className="space-y-6">
-        <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
-          <GrossMarginDonut
-            data={mixQuery.data ?? []}
-            activeChannel={filters.channelFilter}
-            onSelect={(channel) =>
-              startTransition(() =>
-                setFilters((current) => ({
-                  ...current,
-                  channelFilter: channel,
-                })),
-              )
-            }
-          />
-          <section className="glass rounded-[32px] border border-white/10 p-6">
-            <div className="text-sm uppercase tracking-[0.24em] text-slate-500">Контур данных</div>
-            <h2 className="mt-2 text-2xl font-semibold text-white">Статус подключения и рабочие рекомендации</h2>
-            <div className="mt-6 space-y-3 text-sm leading-6 text-slate-300">
-              <p>1. Держите hosted MCP для production только в read-only режиме.</p>
-              <p>2. Любые изменения схемы выпускайте через `supabase migrations` и git.</p>
-              <p>3. Для invite-only доступа настройте magic-link redirect на GitHub Pages callback route.</p>
-            </div>
-            <div className="mt-6 flex flex-wrap gap-3">
-              <Link
-                className="rounded-2xl border border-white/10 px-4 py-3 text-sm text-slate-200 transition hover:border-brand-400/40 hover:text-white"
-                to="/admin/users"
-              >
-                Открыть админку пользователей
-              </Link>
-              <div className="rounded-2xl border border-brand-400/20 bg-brand-400/10 px-4 py-3 text-sm text-brand-200">
-                refresh key: {refreshNonce}
-              </div>
-            </div>
-          </section>
-        </div>
+        <GrossMarginDonut
+          data={mixQuery.data ?? []}
+          activeChannel={filters.channelFilter}
+          onSelect={(channel) =>
+            startTransition(() =>
+              setFilters((current) => ({
+                ...current,
+                channelFilter: channel,
+              })),
+            )
+          }
+        />
 
         <section className="grid gap-4">
           {activeViews.map((view) => {

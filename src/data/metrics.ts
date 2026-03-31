@@ -27,9 +27,9 @@ export const DEFAULT_VIEWS: DashboardView[] = METRIC_DEFINITIONS.map((metric, in
   viewKey: `${metric.id}-table`,
   metricId: metric.id,
   title: metric.label,
-  enabled: true,
+  enabled: metric.id === "gross_margin",
   position: index + 1,
   visibleColumns: [...DEFAULT_COLUMN_ORDER],
   columnOrder: [...DEFAULT_COLUMN_ORDER],
-  defaultMaxDepth: metric.id === "gross_margin" ? 2 : 3,
+  defaultMaxDepth: 2,
 }));

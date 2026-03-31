@@ -48,6 +48,10 @@ type RoistatAnalyticsRow = {
   source_level_2: string | null;
   source_level_3: string | null;
   marketing_cost: number | null;
+  leads: number | null;
+  sales: number | null;
+  revenue: number | null;
+  profit: number | null;
   raw_data: Json | null;
 };
 type RoistatOrderRow = {
@@ -600,99 +604,31 @@ async function getPublicAnalyticsFacts(filters: DashboardFilterState): Promise<S
     const startDate = addDays(new Date(`${filters.dateFrom}T00:00:00.000Z`), filters.grain === "day" ? -1 : -7)
       .toISOString()
       .slice(0, 10);
-    const endExclusive = nextDate(filters.dateTo);
 
-    const [visits, orders, analytics, costs] = await Promise.all([
-      fetchPublicRows<RoistatVisitRow>(
-        "roistat_visits",
-        "id,date,source,utm_source,utm_medium,utm_campaign,utm_term,utm_content,raw_data",
-        [
-          ["date", `gte.${startDate}T00:00:00Z`],
-          ["date", `lt.${endExclusive}T00:00:00Z`],
-        ],
-        "date.asc",
-      ),
-      fetchPublicRows<RoistatOrderRow>(
-        "roistat_orders",
-        "date_create,source,status_name,status_type,price,profit",
-        [
-          ["date_create", `gte.${startDate}T00:00:00Z`],
-          ["date_create", `lt.${endExclusive}T00:00:00Z`],
-        ],
-        "date_create.asc",
-      ),
-      fetchPublicRows<RoistatAnalyticsRow>(
-        "roistat_analytics",
-        "report_date,source,source_level_2,source_level_3,marketing_cost,raw_data",
-        [
-          ["report_date", `gte.${startDate}`],
-          ["report_date", `lte.${filters.dateTo}`],
-        ],
-        "report_date.asc",
-      ),
-      fetchPublicRows<RoistatCostRow>(
-        "roistat_costs",
-        "date,source,cost,raw_data",
-        [
-          ["date", `gte.${startDate}`],
-          ["date", `lte.${filters.dateTo}`],
-        ],
-        "date.asc",
-      ),
-    ]);
-
-    const aliasMap = new Map<string, SourceProfile>();
-    for (const visit of visits) {
-      const { profile, aliases } = profileFromVisit(visit);
-      registerProfile(aliasMap, profile, aliases);
-    }
-    for (const row of analytics) {
-      const { profile, aliases } = profileFromAnalytics(row);
-      registerProfile(aliasMap, profile, aliases);
-    }
+    const rows = await fetchPublicRows<RoistatAnalyticsRow>(
+      "roistat_analytics",
+      "report_date,source,source_level_2,source_level_3,marketing_cost,leads,sales,revenue,profit,raw_data",
+      [
+        ["report_date", `gte.${startDate}`],
+        ["report_date", `lte.${filters.dateTo}`],
+      ],
+      "report_date.asc",
+    );
 
     const facts = new Map<string, SourceFact>();
-    const ensureFact = (reportDate: string, profile: SourceProfile) => {
-      const key = getFactKey(reportDate, profile.sourceKey);
-      if (!facts.has(key)) {
-        facts.set(key, createEmptyFact(reportDate, profile));
-      }
-      return facts.get(key)!;
-    };
 
-    for (const row of orders) {
-      const profile = resolveProfile(aliasMap, row.source);
-      const fact = ensureFact(orderDate(row.date_create), profile);
-      fact.leads += 1;
-      fact.revenue += Number(row.price ?? 0);
-      fact.grossMargin += Number(row.profit ?? 0);
-
-      if (isMqlStatus(row.status_name)) {
-        fact.mqlt += 1;
-      }
-
-      if (isMeetingStatus(row.status_name)) {
-        fact.meetingsScheduled += 1;
-      }
-
-      if (isSaleStatus(row.status_type, row.price, row.profit)) {
-        fact.sales += 1;
-      }
-    }
-
-    for (const row of analytics) {
+    for (const row of rows) {
       const { profile } = profileFromAnalytics(row);
-      const fact = ensureFact(row.report_date, profile);
-      fact.spend += Number(getAnalyticsSpend(row) ?? 0);
-    }
-
-    for (const row of costs) {
-      if (!row.date) {
-        continue;
+      const key = getFactKey(row.report_date, profile.sourceKey);
+      if (!facts.has(key)) {
+        facts.set(key, createEmptyFact(row.report_date, profile));
       }
-      const profile = resolveProfile(aliasMap, row.source);
-      const fact = ensureFact(row.date, profile);
-      fact.spend += Number(row.cost ?? 0);
+      const fact = facts.get(key)!;
+      fact.spend       += getAnalyticsSpend(row);
+      fact.leads       += Number(row.leads   ?? 0);
+      fact.sales       += Number(row.sales   ?? 0);
+      fact.revenue     += Number(row.revenue ?? 0);
+      fact.grossMargin += Number(row.profit  ?? 0);
     }
 
     return [...facts.values()];
