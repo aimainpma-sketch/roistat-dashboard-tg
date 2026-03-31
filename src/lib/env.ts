@@ -5,6 +5,7 @@ export const env = {
   supabaseAnonKey: import.meta.env.VITE_SUPABASE_ANON_KEY?.trim() ?? "",
   basePath: import.meta.env.VITE_APP_BASE_PATH?.trim() ?? fallbackBasePath,
   demoMode: import.meta.env.VITE_DEMO_MODE === "true",
+  accessPassword: import.meta.env.VITE_ACCESS_PASSWORD?.trim() ?? "",
 };
 
 export const isSupabaseConfigured = Boolean(env.supabaseUrl && env.supabaseAnonKey);

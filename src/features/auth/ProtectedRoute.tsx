@@ -3,7 +3,7 @@ import { useAuth } from "@/features/auth/AuthProvider";
 
 export function ProtectedRoute() {
   const location = useLocation();
-  const { initialized, session, isDemoMode } = useAuth();
+  const { initialized, session, isDemoMode, isPasswordAuthenticated } = useAuth();
 
   if (!initialized) {
     return (
@@ -13,7 +13,7 @@ export function ProtectedRoute() {
     );
   }
 
-  if (!session && !isDemoMode) {
+  if (!session && !isDemoMode && !isPasswordAuthenticated) {
     return (
       <Navigate
         to="/login"

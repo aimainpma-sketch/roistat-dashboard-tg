@@ -1,6 +1,33 @@
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
 
 export type Database = {
+  public: {
+    Tables: {
+      roistat_analytics: {
+        Row: {
+          id: number;
+          report_date: string;
+          source: string | null;
+          source_level_2: string | null;
+          source_level_3: string | null;
+          visits: number | null;
+          leads: number | null;
+          sales: number | null;
+          revenue: number | null;
+          marketing_cost: number | null;
+          profit: number | null;
+          roi: number | null;
+          conversion_rate: number | null;
+          raw_data: Json | null;
+          synced_at: string | null;
+        };
+        Insert: never;
+        Update: never;
+      };
+    };
+    Views: Record<string, never>;
+    Functions: Record<string, never>;
+  };
   app: {
     Tables: {
       user_roles: {

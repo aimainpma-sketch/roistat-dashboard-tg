@@ -18,7 +18,7 @@ export function AppShell({
   role: UserRole;
   actions?: ReactNode;
 }) {
-  const { signOut, user, isDemoMode } = useAuth();
+  const { signOut, user, isDemoMode, isPasswordAuthenticated } = useAuth();
 
   return (
     <div className="min-h-screen bg-ink-950 text-slate-100">
@@ -52,9 +52,11 @@ export function AppShell({
 
           <div className="mt-auto rounded-3xl border border-white/8 bg-white/5 p-4">
             <div className="text-xs uppercase tracking-[0.24em] text-slate-500">
-              {isDemoMode ? "Demo access" : "Signed in"}
+              {isPasswordAuthenticated ? "Password access" : isDemoMode ? "Demo access" : "Signed in"}
             </div>
-            <div className="mt-2 text-sm font-medium text-white">{user?.email ?? "demo@roistat.local"}</div>
+            <div className="mt-2 text-sm font-medium text-white">
+              {user?.email ?? (isPasswordAuthenticated ? "super-admin@local" : "demo@roistat.local")}
+            </div>
             <div className="mt-1 text-sm text-slate-400">Роль: {role}</div>
             <button
               className="mt-4 inline-flex items-center gap-2 rounded-2xl border border-white/10 px-4 py-2 text-sm text-slate-300 transition hover:border-brand-400/40 hover:text-white"

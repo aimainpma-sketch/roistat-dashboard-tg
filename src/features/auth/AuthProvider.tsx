@@ -10,24 +10,32 @@ type AuthContextValue = {
   user: User | null;
   role: UserRole;
   signInWithMagicLink: (email: string) => Promise<void>;
+  signInWithPassword: (password: string) => Promise<void>;
   signOut: () => Promise<void>;
   enterDemoMode: () => void;
   isDemoMode: boolean;
+  isPasswordProtected: boolean;
+  isPasswordAuthenticated: boolean;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 const demoSessionKey = "roistat-dashboard.demo-session";
+const passwordSessionKey = "roistat-dashboard.password-session";
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [initialized, setInitialized] = useState(false);
   const [session, setSession] = useState<Session | null>(null);
   const [role] = useState<UserRole>("admin");
   const [isDemoMode, setIsDemoMode] = useState(false);
+  const [isPasswordAuthenticated, setIsPasswordAuthenticated] = useState(false);
 
   useEffect(() => {
+    const hasDemoSession = window.localStorage.getItem(demoSessionKey) === "true" || env.demoMode;
+    const hasPasswordSession = window.localStorage.getItem(passwordSessionKey) === "true";
+    setIsDemoMode(hasDemoSession);
+    setIsPasswordAuthenticated(Boolean(env.accessPassword && hasPasswordSession));
+
     if (!isSupabaseConfigured || !supabase) {
-      const hasDemoSession = window.localStorage.getItem(demoSessionKey) === "true" || env.demoMode;
-      setIsDemoMode(hasDemoSession);
       setInitialized(true);
       return;
     }
@@ -70,20 +78,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           throw error;
         }
       },
+      async signInWithPassword(password) {
+        if (!env.accessPassword) {
+          throw new Error("Парольный режим не настроен.");
+        }
+
+        if (password !== env.accessPassword) {
+          throw new Error("Неверный пароль.");
+        }
+
+        window.localStorage.setItem(passwordSessionKey, "true");
+        setIsPasswordAuthenticated(true);
+      },
       async signOut() {
         if (supabase) {
           await supabase.auth.signOut();
         }
 
         window.localStorage.removeItem(demoSessionKey);
-        setIsDemoMode(false);
+        window.localStorage.removeItem(passwordSessionKey);
+        setIsDemoMode(env.demoMode);
+        setIsPasswordAuthenticated(false);
       },
       enterDemoMode() {
         window.localStorage.setItem(demoSessionKey, "true");
         setIsDemoMode(true);
       },
+      isPasswordProtected: Boolean(env.accessPassword),
+      isPasswordAuthenticated,
     }),
-    [initialized, isDemoMode, role, session],
+    [initialized, isDemoMode, isPasswordAuthenticated, role, session],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

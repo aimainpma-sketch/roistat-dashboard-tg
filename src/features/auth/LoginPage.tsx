@@ -1,13 +1,14 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { Mail, ShieldCheck } from "lucide-react";
+import { KeyRound, Mail, ShieldCheck } from "lucide-react";
 import { useAuth } from "@/features/auth/AuthProvider";
-import { isSupabaseConfigured } from "@/lib/env";
+import { env, isSupabaseConfigured } from "@/lib/env";
 import { cn } from "@/lib/utils";
 
 export function LoginPage() {
-  const { signInWithMagicLink, enterDemoMode } = useAuth();
+  const { signInWithMagicLink, signInWithPassword, enterDemoMode, isPasswordProtected } = useAuth();
   const [email, setEmail] = useState("hakunov1991@gmail.com");
+  const [password, setPassword] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -22,6 +23,21 @@ export function LoginPage() {
       setSubmitted(true);
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "Не удалось отправить magic link");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePasswordSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setError(null);
+    setLoading(true);
+
+    try {
+      await signInWithPassword(password);
+      window.location.assign(`${window.location.origin}${env.basePath}dashboard`);
+    } catch (submitError) {
+      setError(submitError instanceof Error ? submitError.message : "Не удалось открыть доступ");
     } finally {
       setLoading(false);
     }
@@ -70,41 +86,75 @@ export function LoginPage() {
                 </div>
                 <div>
                   <div className="text-sm uppercase tracking-[0.24em] text-slate-400">Invite-only access</div>
-                  <div className="text-lg font-medium text-white">Вход по magic link</div>
+                  <div className="text-lg font-medium text-white">
+                    {isPasswordProtected ? "Вход по паролю" : "Вход по magic link"}
+                  </div>
                 </div>
               </div>
 
-              <form
-                className="space-y-4"
-                onSubmit={handleSubmit}
-              >
-                <label className="block">
-                  <span className="mb-2 block text-sm text-slate-300">Email</span>
-                  <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
-                    <Mail className="size-4 text-slate-400" />
-                    <input
-                      className="w-full bg-transparent text-white outline-none placeholder:text-slate-500"
-                      type="email"
-                      value={email}
-                      onChange={(event) => setEmail(event.target.value)}
-                      placeholder="you@company.com"
-                    />
-                  </div>
-                </label>
-
-                <button
-                  className={cn(
-                    "w-full rounded-2xl px-4 py-3 text-sm font-medium text-slate-950 transition",
-                    loading ? "bg-slate-400" : "bg-brand-400 hover:bg-brand-500",
-                  )}
-                  disabled={loading}
-                  type="submit"
+              {isPasswordProtected ? (
+                <form
+                  className="space-y-4"
+                  onSubmit={handlePasswordSubmit}
                 >
-                  {loading ? "Отправляем..." : "Получить ссылку для входа"}
-                </button>
-              </form>
+                  <label className="block">
+                    <span className="mb-2 block text-sm text-slate-300">Пароль</span>
+                    <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
+                      <KeyRound className="size-4 text-slate-400" />
+                      <input
+                        className="w-full bg-transparent text-white outline-none placeholder:text-slate-500"
+                        type="password"
+                        value={password}
+                        onChange={(event) => setPassword(event.target.value)}
+                        placeholder="Введите пароль"
+                      />
+                    </div>
+                  </label>
 
-              {submitted ? (
+                  <button
+                    className={cn(
+                      "w-full rounded-2xl px-4 py-3 text-sm font-medium text-slate-950 transition",
+                      loading ? "bg-slate-400" : "bg-brand-400 hover:bg-brand-500",
+                    )}
+                    disabled={loading}
+                    type="submit"
+                  >
+                    {loading ? "Проверяем..." : "Открыть супер-админ доступ"}
+                  </button>
+                </form>
+              ) : (
+                <form
+                  className="space-y-4"
+                  onSubmit={handleSubmit}
+                >
+                  <label className="block">
+                    <span className="mb-2 block text-sm text-slate-300">Email</span>
+                    <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
+                      <Mail className="size-4 text-slate-400" />
+                      <input
+                        className="w-full bg-transparent text-white outline-none placeholder:text-slate-500"
+                        type="email"
+                        value={email}
+                        onChange={(event) => setEmail(event.target.value)}
+                        placeholder="you@company.com"
+                      />
+                    </div>
+                  </label>
+
+                  <button
+                    className={cn(
+                      "w-full rounded-2xl px-4 py-3 text-sm font-medium text-slate-950 transition",
+                      loading ? "bg-slate-400" : "bg-brand-400 hover:bg-brand-500",
+                    )}
+                    disabled={loading}
+                    type="submit"
+                  >
+                    {loading ? "Отправляем..." : "Получить ссылку для входа"}
+                  </button>
+                </form>
+              )}
+
+              {submitted && !isPasswordProtected ? (
                 <p className="mt-4 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
                   Письмо отправлено. Проверьте inbox и откройте magic link на этом устройстве.
                 </p>
@@ -131,13 +181,20 @@ export function LoginPage() {
                 </div>
               ) : null}
 
-              <p className="mt-6 text-xs leading-6 text-slate-500">
-                После подключения production-проекта включите в Supabase redirect:
-                <br />
-                <span className="text-slate-400">
-                  https://aimainpma-sketch.github.io/roistat-dashboard-tg/auth/callback
-                </span>
-              </p>
+              {isPasswordProtected ? (
+                <p className="mt-6 text-xs leading-6 text-slate-500">
+                  Текущий режим доступа: единый пароль. Это быстрый вариант для закрытого предпросмотра, а не настоящая
+                  серверная защита.
+                </p>
+              ) : (
+                <p className="mt-6 text-xs leading-6 text-slate-500">
+                  После подключения production-проекта включите в Supabase redirect:
+                  <br />
+                  <span className="text-slate-400">
+                    https://aimainpma-sketch.github.io/roistat-dashboard-tg/auth/callback
+                  </span>
+                </p>
+              )}
 
               <Link
                 className="mt-4 inline-flex text-sm text-brand-400 transition hover:text-brand-300"

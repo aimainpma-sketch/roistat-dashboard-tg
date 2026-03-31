@@ -33,8 +33,9 @@ jobs:
       - name: Build app
         env:
           GITHUB_PAGES: "true"
-          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_SUPABASE_URL: https://nohpohynhcjyirqaxjax.supabase.co
+          VITE_SUPABASE_ANON_KEY: sb_publishable_7Xp6LoL6pA-s4ZNCaj74XQ_We4KUdHB
+          VITE_ACCESS_PASSWORD: emilyinparis
           VITE_APP_BASE_PATH: /roistat-dashboard-tg/
         run: npm run build
 
