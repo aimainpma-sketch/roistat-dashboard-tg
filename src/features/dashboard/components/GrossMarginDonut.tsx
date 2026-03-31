@@ -1,5 +1,6 @@
 import { Pie, PieChart, ResponsiveContainer, Cell, Tooltip } from "recharts";
 import { formatMoney, formatPercent } from "@/lib/format";
+import { useTheme } from "@/lib/useTheme";
 import type { DonutSegment } from "@/types/dashboard";
 
 export function GrossMarginDonut({
@@ -11,6 +12,7 @@ export function GrossMarginDonut({
   activeChannel: string | null;
   onSelect: (channel: string | null) => void;
 }) {
+  const { theme } = useTheme();
   const total = data.reduce((sum, item) => sum + item.value, 0);
 
   return (
@@ -62,9 +64,10 @@ export function GrossMarginDonut({
             <PieChart>
               <Tooltip
                 contentStyle={{
-                  backgroundColor: "#0b1220",
+                  backgroundColor: theme === "dark" ? "#0b1220" : "#ffffff",
+                  color: theme === "dark" ? "#e2e8f0" : "#1e293b",
                   borderRadius: "16px",
-                  border: "1px solid rgba(255,255,255,0.08)",
+                  border: theme === "dark" ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(0,0,0,0.1)",
                 }}
                 formatter={(value) => [formatMoney(Number(value ?? 0)), "Валовая маржа"]}
               />

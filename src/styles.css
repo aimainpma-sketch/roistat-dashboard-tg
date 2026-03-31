@@ -15,6 +15,7 @@
   --font-sans: "Inter", "Segoe UI", sans-serif;
 }
 
+/* --- Dark theme (default) --- */
 :root {
   color: rgba(239, 244, 255, 0.96);
   background:
@@ -22,6 +23,20 @@
     radial-gradient(circle at right 20%, rgba(183, 215, 91, 0.16), transparent 22%),
     linear-gradient(180deg, #09101c 0%, #070b16 100%);
   font-family: var(--font-sans);
+}
+
+/* --- Light theme --- */
+:root.light {
+  color: rgba(15, 23, 42, 0.94);
+  background: linear-gradient(180deg, #f1f5f9 0%, #e2e8f0 100%);
+
+  --color-ink-950: #f8fafc;
+  --color-ink-900: #f1f5f9;
+  --color-surface-900: #ffffff;
+  --color-surface-800: #f1f5f9;
+  --color-surface-700: #e2e8f0;
+  --color-brand-500: #2563eb;
+  --color-brand-400: #3b82f6;
 }
 
 body {
@@ -42,7 +57,50 @@ body {
   background: rgba(122, 210, 255, 0.18);
 }
 
+:root.light ::-webkit-scrollbar-thumb {
+  background: rgba(37, 99, 235, 0.2);
+}
+
 .glass {
   background: linear-gradient(180deg, rgba(17, 25, 44, 0.88), rgba(9, 15, 29, 0.78));
   backdrop-filter: blur(18px);
 }
+
+:root.light .glass {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(241, 245, 249, 0.85));
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+/* Light theme: swap text-white → dark, text-slate-* → appropriate dark tones */
+:root.light .text-white { color: #0f172a; }
+:root.light .text-slate-100 { color: #1e293b; }
+:root.light .text-slate-200 { color: #334155; }
+:root.light .text-slate-300 { color: #475569; }
+:root.light .text-slate-400 { color: #64748b; }
+:root.light .text-slate-500 { color: #94a3b8; }
+
+/* Light theme: swap white-alpha backgrounds/borders to black-alpha */
+:root.light [class*="bg-white\\/"] { background-color: rgba(0, 0, 0, 0.04); }
+:root.light [class*="border-white\\/"] { border-color: rgba(0, 0, 0, 0.1); }
+
+/* Light theme: shadow overlay for main panel */
+:root.light [class*="shadow-"] { --tw-shadow-color: rgba(0, 0, 0, 0.06); }
+
+/* Light theme: active grain button */
+:root.light .bg-brand-400 { background-color: #3b82f6; }
+:root.light .text-slate-950 { color: #ffffff; }
+
+/* Light theme: brand accent tints */
+:root.light .text-brand-200,
+:root.light .text-brand-300 { color: #1d4ed8; }
+:root.light [class*="border-brand-400\\/"] { border-color: rgba(59, 130, 246, 0.25); }
+:root.light [class*="bg-brand-400\\/"] { background-color: rgba(59, 130, 246, 0.08); }
+
+/* Light theme: delta colors — darker for readability on white */
+:root.light .text-lime-400 { color: #16a34a; }
+:root.light .text-coral-400 { color: #dc2626; }
+:root.light .text-emerald-300 { color: #059669; }
+:root.light .text-coral-300 { color: #dc2626; }
+
+/* Light theme: dropdown menus */
+:root.light .bg-ink-900 { background-color: #ffffff; }

@@ -1,8 +1,21 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMetricTree } from "@/features/dashboard/hooks/useDashboardData";
 import { MetricTable } from "@/features/dashboard/components/MetricTable";
 import { saveDashboardView, saveUserPreference } from "@/services/dashboardRepository";
 import type { DashboardFilterState, DashboardView, MetricDefinition } from "@/types/dashboard";
+
+function useDebouncedEffect(fn: () => void, deps: unknown[], delay: number) {
+  const mountedRef = useRef(false);
+  useEffect(() => {
+    if (!mountedRef.current) {
+      mountedRef.current = true;
+      return;
+    }
+    const timer = setTimeout(fn, delay);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, deps);
+}
 
 export function MetricSection({
   metric,
@@ -26,17 +39,21 @@ export function MetricSection({
 
   const { data, isLoading } = useMetricTree(metric.id, filters, view.defaultMaxDepth);
 
-  useEffect(() => {
-    void saveUserPreference(
-      {
-        viewKey: view.viewKey,
-        grain: filters.grain,
-        expandedPaths,
-        channelFilter: filters.channelFilter,
-      },
-      userId,
-    );
-  }, [expandedPaths, filters.channelFilter, filters.grain, userId, view.viewKey]);
+  useDebouncedEffect(
+    () => {
+      void saveUserPreference(
+        {
+          viewKey: view.viewKey,
+          grain: filters.grain,
+          expandedPaths,
+          channelFilter: filters.channelFilter,
+        },
+        userId,
+      );
+    },
+    [expandedPaths, filters.channelFilter, filters.grain, userId, view.viewKey],
+    500,
+  );
 
   const syncedView = useMemo(
     () => ({
@@ -47,9 +64,13 @@ export function MetricSection({
     [columnOrder, view, visibleColumns],
   );
 
-  useEffect(() => {
-    void saveDashboardView(syncedView);
-  }, [syncedView]);
+  useDebouncedEffect(
+    () => {
+      void saveDashboardView(syncedView);
+    },
+    [syncedView],
+    500,
+  );
 
   if (isLoading || !data) {
     return (

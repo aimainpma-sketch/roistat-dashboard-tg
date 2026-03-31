@@ -1,7 +1,8 @@
 import type { ReactNode } from "react";
 import { Link, NavLink } from "react-router-dom";
-import { LayoutDashboard, LogOut, Settings2, Shield } from "lucide-react";
+import { LayoutDashboard, LogOut, Moon, Settings2, Shield, Sun } from "lucide-react";
 import { useAuth } from "@/features/auth/AuthProvider";
+import { useTheme } from "@/lib/useTheme";
 import { cn } from "@/lib/utils";
 import type { UserRole } from "@/types/dashboard";
 
@@ -19,6 +20,7 @@ export function AppShell({
   actions?: ReactNode;
 }) {
   const { signOut, user, isDemoMode, isPasswordAuthenticated } = useAuth();
+  const { theme, toggle: toggleTheme } = useTheme();
 
   return (
     <div className="min-h-screen bg-ink-950 text-slate-100">
@@ -50,7 +52,16 @@ export function AppShell({
             ) : null}
           </nav>
 
-          <div className="mt-auto rounded-3xl border border-white/8 bg-white/5 p-4">
+          <button
+            className="mt-auto mb-4 flex w-full items-center gap-3 rounded-2xl border border-white/8 bg-white/5 px-4 py-3 text-sm text-slate-300 transition hover:bg-white/10 hover:text-white"
+            onClick={toggleTheme}
+            type="button"
+          >
+            {theme === "dark" ? <Sun className="size-4" /> : <Moon className="size-4" />}
+            {theme === "dark" ? "Светлая тема" : "Тёмная тема"}
+          </button>
+
+          <div className="rounded-3xl border border-white/8 bg-white/5 p-4">
             <div className="text-xs uppercase tracking-[0.24em] text-slate-500">
               {isPasswordAuthenticated ? "Password access" : isDemoMode ? "Demo access" : "Signed in"}
             </div>

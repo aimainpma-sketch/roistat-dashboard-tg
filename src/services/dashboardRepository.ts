@@ -761,12 +761,46 @@ async function fetchAnalyticsSpend(
 
 // ---------------------------------------------------------------------------
 // Unified fact assembly: orders + visits + sources + analytics spend
+// Deduplication: concurrent calls with the same filter key share one fetch.
 // ---------------------------------------------------------------------------
+let factsInflight: { key: string; promise: Promise<SourceFact[] | null> } | null = null;
+const FACTS_CACHE_TTL = 30_000; // 30 s
+let factsCache: { key: string; data: SourceFact[]; loadedAt: number } | null = null;
+
+function factsKey(filters: DashboardFilterState) {
+  return `${filters.dateFrom}::${filters.dateTo}::${filters.grain}`;
+}
+
 async function getPublicFacts(filters: DashboardFilterState): Promise<SourceFact[] | null> {
   if (!env.supabaseUrl || !env.supabaseAnonKey) {
     return null;
   }
 
+  const key = factsKey(filters);
+
+  // Return cached result if fresh
+  if (factsCache && factsCache.key === key && Date.now() - factsCache.loadedAt < FACTS_CACHE_TTL) {
+    return factsCache.data;
+  }
+
+  // Deduplicate concurrent in-flight requests
+  if (factsInflight && factsInflight.key === key) {
+    return factsInflight.promise;
+  }
+
+  const promise = fetchPublicFactsCore(filters, key);
+  factsInflight = { key, promise };
+
+  try {
+    return await promise;
+  } finally {
+    if (factsInflight?.promise === promise) {
+      factsInflight = null;
+    }
+  }
+}
+
+async function fetchPublicFactsCore(filters: DashboardFilterState, cacheKey: string): Promise<SourceFact[] | null> {
   try {
     const startDate = addDays(new Date(`${filters.dateFrom}T00:00:00.000Z`), filters.grain === "day" ? -1 : -7)
       .toISOString()
@@ -803,7 +837,9 @@ async function getPublicFacts(filters: DashboardFilterState): Promise<SourceFact
       }
     }
 
-    return [...orderFacts.values()];
+    const result = [...orderFacts.values()];
+    factsCache = { key: cacheKey, data: result, loadedAt: Date.now() };
+    return result;
   } catch {
     return null;
   }
