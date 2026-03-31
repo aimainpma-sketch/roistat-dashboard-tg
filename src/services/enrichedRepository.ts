@@ -365,17 +365,23 @@ async function fetchChannelSpend(
       }),
     });
 
-    if (!response.ok) return [];
+    if (!response.ok) {
+      console.warn("[spend] Roistat API response not ok:", response.status);
+      return [];
+    }
     const json = (await response.json()) as RoistatAnalyticsResponse;
-    if (json.status === "error" || !json.data) return [];
+    if (!json.data || (json.status && json.status !== "success")) {
+      console.warn("[spend] Roistat API error:", json.status);
+      return [];
+    }
 
     const spendMap = new Map<string, ChannelDateSpend>();
     const period = json.data[0];
-    // Use the middle of the requested range as reportDate (YYYY-MM-DD format)
-    // so it passes date filtering in aggregations
+    const items = period?.items ?? [];
+    // Use endDate (YYYY-MM-DD) as reportDate so it passes date filtering
     const reportDate = endDate;
 
-    for (const item of period?.items ?? []) {
+    for (const item of items) {
       const dim = item.dimensions.marker_level_1;
       if (!dim) continue;
       const channel = sourceKeyToChannel(dim.value, dim.title);
@@ -391,8 +397,10 @@ async function fetchChannelSpend(
       }
     }
 
+    console.log(`[spend] Roistat API: ${items.length} sources, ${spendMap.size} channels, total $${[...spendMap.values()].reduce((s, v) => s + v.spend, 0).toFixed(0)}`);
     return [...spendMap.values()];
-  } catch {
+  } catch (err) {
+    console.error("[spend] Roistat API fetch failed:", err);
     return [];
   }
 }

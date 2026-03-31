@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TumanovGroup — Phuket Real Estate Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'DM Sans',sans-serif;background:#0e1015;color:#c8ccd2;min-height:100vh}
+::-webkit-scrollbar{width:5px}
+::-webkit-scrollbar-track{background:#0e1015}
+::-webkit-scrollbar-thumb{background:#2a2d35;border-radius:3px}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.header{background:linear-gradient(135deg,#12151c 0%,#1a1520 50%,#12151c 100%);border-bottom:1px solid rgba(255,255,255,0.06);padding:20px 32px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px}
+.header-title{font-family:'Outfit',sans-serif;font-size:22px;font-weight:700;color:#e8eaed}
+.header-title span.accent{color:#f97316}
+.header-title span.sub{font-size:13px;font-weight:400;color:#5a5f6a;margin-left:4px}
+.header-meta{font-size:12px;color:#4a4f5a;margin-top:2px}
+.date-filters{display:flex;gap:6px}
+.date-btn{padding:5px 14px;border-radius:6px;font-size:12px;cursor:pointer;border:1px solid rgba(255,255,255,0.08);background:transparent;color:#6b7280;font-family:'DM Sans',sans-serif;transition:all 0.2s}
+.date-btn.active{border-color:#f97316;background:rgba(249,115,22,0.12);color:#f97316}
+
+.tabs{display:flex;overflow-x:auto;gap:2px;padding:0 32px;background:rgba(0,0,0,0.2);border-bottom:1px solid rgba(255,255,255,0.04)}
+.tab{padding:12px 20px;font-size:13px;cursor:pointer;border:none;background:transparent;color:#5a5f6a;border-bottom:2px solid transparent;font-family:'DM Sans',sans-serif;font-weight:400;transition:all 0.2s}
+.tab.active{color:#f97316;border-bottom-color:#f97316;font-weight:600}
+
+.content{padding:24px 32px;animation:fadeIn 0.3s ease}
+.kpi-row{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:24px}
+.kpi{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:12px;padding:20px 24px;min-width:170px;flex:1}
+.kpi-label{font-size:12px;color:#8a8f98;letter-spacing:0.5px;margin-bottom:8px}
+.kpi-value{font-size:28px;font-weight:700;color:#e8eaed;font-family:'Outfit',sans-serif;line-height:1.1}
+.kpi-sub{font-size:12px;color:#5a5f6a;margin-top:6px}
+
+.section-title{font-size:16px;font-weight:600;color:#c8ccd2;font-family:'Outfit',sans-serif;margin:32px 0 16px;padding-bottom:8px;border-bottom:1px solid rgba(255,255,255,0.06)}
+.chart-wrap{position:relative;height:300px;margin-bottom:24px}
+
+.funnel-row{display:flex;align-items:center;gap:12px;padding:8px 0;animation:fadeIn 0.3s ease}
+.funnel-dot{width:8px;height:8px;border-radius:2px;flex-shrink:0}
+.funnel-name{width:260px;font-size:12px;color:#c8ccd2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.funnel-bar-bg{flex:1;height:24px;background:rgba(255,255,255,0.03);border-radius:4px;overflow:hidden;position:relative}
+.funnel-bar{height:100%;border-radius:4px;opacity:0.7;transition:width 0.5s ease}
+.funnel-count{width:60px;font-size:13px;font-weight:600;color:#e8eaed;text-align:right}
+.funnel-pct{width:50px;font-size:11px;color:#5a5f6a;text-align:right}
+
+table{width:100%;border-collapse:collapse;font-size:13px}
+thead tr{border-bottom:1px solid rgba(255,255,255,0.08)}
+th{padding:10px 12px;text-align:left;color:#5a5f6a;font-weight:500;font-size:11px;text-transform:uppercase;letter-spacing:0.5px}
+td{padding:10px 12px}
+tbody tr{border-bottom:1px solid rgba(255,255,255,0.03)}
+.cr-badge{padding:2px 8px;border-radius:4px;font-size:12px}
+.cr-good{background:rgba(34,197,94,0.15);color:#22c55e}
+.cr-mid{background:rgba(234,179,8,0.15);color:#eab308}
+
+.tag-cards{display:flex;gap:12px;flex-wrap:wrap}
+.tag-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:16px 20px;min-width:140px}
+.tag-card-label{font-size:11px;color:#5a5f6a;margin-bottom:6px}
+.tag-card-value{font-size:22px;font-weight:700;font-family:'Outfit',sans-serif}
+
+.legend-row{margin-top:16px;display:flex;gap:16px;font-size:12px}
+.legend-item{display:flex;align-items:center;gap:5px;color:#5a5f6a}
+.legend-dot{width:8px;height:8px;border-radius:2px}
+
+.loading{text-align:center;padding:80px 0}
+.spinner{width:32px;height:32px;border:3px solid #2a2d35;border-top-color:#f97316;border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto 12px}
+
+.tab-content{display:none}
+.tab-content.active{display:block}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <div class="header-title"><span class="accent">◆</span> TumanovGroup <span class="sub">Phuket Real Estate</span></div>
+    <div class="header-meta" id="headerMeta">Загрузка…</div>
+  </div>
+  <div class="date-filters" id="dateFilters">
+    <button class="date-btn active" data-range="all">Всё время</button>
+    <button class="date-btn" data-range="1y">Год</button>
+    <button class="date-btn" data-range="6m">6 мес</button>
+    <button class="date-btn" data-range="90d">90 дн</button>
+    <button class="date-btn" data-range="30d">30 дн</button>
+  </div>
+</div>
+
+<div class="tabs" id="tabsBar">
+  <button class="tab active" data-tab="overview">Обзор</button>
+  <button class="tab" data-tab="funnel">Воронка</button>
+  <button class="tab" data-tab="sources">Источники</button>
+  <button class="tab" data-tab="managers">Менеджеры</button>
+  <button class="tab" data-tab="objects">Объекты</button>
+  <button class="tab" data-tab="visits">Визиты</button>
+</div>
+
+<div class="content" id="mainContent">
+  <div class="loading" id="loadingBlock">
+    <div class="spinner"></div>
+    <div style="font-size:14px;color:#5a5f6a">Загружаю данные из Supabase…</div>
+    <div style="font-size:12px;color:#3a3f4a;margin-top:4px" id="loadingStatus"></div>
+  </div>
+
+  <div class="tab-content active" id="tab-overview"></div>
+  <div class="tab-content" id="tab-funnel"></div>
+  <div class="tab-content" id="tab-sources"></div>
+  <div class="tab-content" id="tab-managers"></div>
+  <div class="tab-content" id="tab-objects"></div>
+  <div class="tab-content" id="tab-visits"></div>
+</div>
+
+<script>
+const SUPABASE_URL = 'https://nohpohynhcjyirqaxjax.supabase.co/rest/v1';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5vaHBvaHluaGNqeWlycWF4amF4Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NDUyMzUwMCwiZXhwIjoyMDkwMDk5NTAwfQ.Tp5biynCSZe0qW0cXU2YrQndj1m6ef0HHFrjb-98faY';
+const HEADERS = { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + SUPABASE_KEY, 'Content-Type': 'application/json', Prefer: 'count=exact' };
+const COLORS = ['#f97316','#06b6d4','#8b5cf6','#22c55e','#ef4444','#eab308','#ec4899','#14b8a6','#6366f1','#f43f5e','#84cc16','#a855f7'];
+const STATUS_COLORS = { progress:'#3b82f6', success:'#22c55e', fail:'#ef4444', unused:'#6b7280' };
+
+let allOrders = [], allVisits = [], allCalls = [], allStatuses = [];
+let currentRange = 'all';
+let charts = {};
+
+async function fetchAll(table, select, statusEl) {
+  let all = [], offset = 0, total = null;
+  while (total === null || offset < total) {
+    const url = SUPABASE_URL + '/' + table + '?select=' + (select||'*') + '&limit=1000&offset=' + offset;
+    const res = await fetch(url, { headers: HEADERS });
+    if (!res.ok) throw new Error(table + ': HTTP ' + res.status);
+    const range = res.headers.get('content-range');
+    if (range) { const m = range.match(/\/(\d+)/); if (m) total = parseInt(m[1]); }
+    const data = await res.json();
+    if (!data.length) break;
+    all = all.concat(data);
+    offset += 1000;
+    if (statusEl) statusEl.textContent = table + ': ' + all.length + (total ? '/' + total : '') + ' записей';
+    if (total && offset >= total) break;
+  }
+  return all;
+}
+
+function pcf(cf, field) {
+  if (!cf) return null;
+  if (typeof cf === 'string') { try { cf = JSON.parse(cf); } catch { return null; } }
+  return cf[field] || null;
+}
+
+function fmt(n) {
+  if (n >= 1e9) return (n/1e9).toFixed(1) + ' млрд';
+  if (n >= 1e6) return (n/1e6).toFixed(1) + ' млн';
+  if (n >= 1e3) return (n/1e3).toFixed(1) + ' тыс';
+  return n.toFixed(0);
+}
+
+function fmtP(n) {
+  if (n >= 1e9) return (n/1e9).toFixed(2) + ' млрд ₽';
+  if (n >= 1e6) return (n/1e6).toFixed(1) + ' млн ₽';
+  if (n >= 1e3) return (n/1e3).toFixed(0) + ' тыс ₽';
+  return n.toFixed(0) + ' ₽';
+}
+
+function normSource(src) {
+  if (!src) return 'Не определён';
+  if (src.includes('direct1')) return 'Яндекс.Директ';
+  if (src.includes('google1')) return 'Google Ads';
+  if (src.includes('avito')) return 'Avito';
+  if (src.includes('facebook') || src.includes('instagram')) return 'Facebook/Instagram';
+  if (src.includes('nosource')) return 'Без источника (CRM)';
+  if (src.includes('organic')) return 'Органика';
+  if (src.length > 30) return src.substring(0, 30) + '…';
+  return src;
+}
+
+function filterOrders() {
+  if (currentRange === 'all') return allOrders;
+  const now = Date.now();
+  const days = { '30d': 30, '90d': 90, '6m': 180, '1y': 365 };
+  const from = now - (days[currentRange] || 9999) * 86400000;
+  return allOrders.filter(o => new Date(o.date_create).getTime() >= from);
+}
+
+function destroyChart(id) {
+  if (charts[id]) { charts[id].destroy(); delete charts[id]; }
+}
+
+function createChart(canvasId, config) {
+  destroyChart(canvasId);
+  const ctx = document.getElementById(canvasId);
+  if (!ctx) return;
+  charts[canvasId] = new Chart(ctx, config);
+}
+
+function computeStats(orders) {
+  const total = orders.length;
+  const totalRevenue = orders.reduce((s,o) => s + (parseFloat(o.price)||0), 0);
+  const avgCheck = total > 0 ? totalRevenue / total : 0;
+  const won = orders.filter(o => o.status_type === 'success');
+  const lost = orders.filter(o => o.status_type === 'fail');
+  const active = orders.filter(o => o.status_type === 'progress');
+  const wonRevenue = won.reduce((s,o) => s + (parseFloat(o.price)||0), 0);
+  const cr = total > 0 ? ((won.length/total)*100).toFixed(1) : '0';
+
+  const byStatus = {};
+  orders.forEach(o => {
+    const n = o.status_name || 'Без статуса';
+    if (!byStatus[n]) byStatus[n] = { name: n, count: 0, revenue: 0, type: o.status_type };
+    byStatus[n].count++;
+    byStatus[n].revenue += parseFloat(o.price)||0;
+  });
+
+  const byManager = {};
+  orders.forEach(o => {
+    const m = pcf(o.custom_fields, 'Менеджер') || 'Не назначен';
+    if (!byManager[m]) byManager[m] = { name: m, total: 0, won: 0, revenue: 0, wonRev: 0 };
+    byManager[m].total++;
+    byManager[m].revenue += parseFloat(o.price)||0;
+    if (o.status_type === 'success') { byManager[m].won++; byManager[m].wonRev += parseFloat(o.price)||0; }
+  });
+
+  const byMonth = {};
+  orders.forEach(o => {
+    const d = new Date(o.date_create);
+    const k = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
+    if (!byMonth[k]) byMonth[k] = { month: k, leads: 0, won: 0, rev: 0 };
+    byMonth[k].leads++;
+    if (o.status_type === 'success') { byMonth[k].won++; byMonth[k].rev += parseFloat(o.price)||0; }
+  });
+
+  const bySource = {};
+  orders.forEach(o => {
+    const src = normSource(o.source);
+    if (!bySource[src]) bySource[src] = { name: src, count: 0, won: 0, revenue: 0 };
+    bySource[src].count++;
+    if (o.status_type === 'success') { bySource[src].won++; bySource[src].revenue += parseFloat(o.price)||0; }
+  });
+
+  const byType = {};
+  orders.forEach(o => {
+    const t = pcf(o.custom_fields, 'Тип объекта') || 'Не указан';
+    if (!byType[t]) byType[t] = { name: t, count: 0, revenue: 0 };
+    byType[t].count++;
+    byType[t].revenue += parseFloat(o.price)||0;
+  });
+
+  const byPurpose = {};
+  orders.forEach(o => {
+    const p = pcf(o.custom_fields, 'Цель покупки') || 'Не указана';
+    if (!byPurpose[p]) byPurpose[p] = { name: p, count: 0 };
+    byPurpose[p].count++;
+  });
+
+  const byPayment = {};
+  orders.forEach(o => {
+    const p = pcf(o.custom_fields, 'Форма оплаты') || 'Не указана';
+    if (!byPayment[p]) byPayment[p] = { name: p, count: 0 };
+    byPayment[p].count++;
+  });
+
+  const byReadiness = {};
+  orders.forEach(o => {
+    const r = pcf(o.custom_fields, 'Готовность объекта') || 'Не указана';
+    if (!byReadiness[r]) byReadiness[r] = { name: r, count: 0 };
+    byReadiness[r].count++;
+  });
+
+  const clients = new Set(orders.map(o => o.client_id).filter(Boolean));
+  const clientDeals = {};
+  orders.forEach(o => { if (o.client_id) { clientDeals[o.client_id] = (clientDeals[o.client_id]||0)+1; } });
+  const repeatClients = Object.values(clientDeals).filter(c => c > 1).length;
+
+  return {
+    total, totalRevenue, avgCheck, won: won.length, lost: lost.length, active: active.length,
+    wonRevenue, cr, uniqueClients: clients.size, repeatClients,
+    statusData: Object.values(byStatus).sort((a,b) => b.count - a.count),
+    managerData: Object.values(byManager).map(m => ({...m, cr: m.total > 0 ? ((m.won/m.total)*100).toFixed(1) : '0'})).sort((a,b) => b.total - a.total).slice(0,15),
+    monthlyData: Object.values(byMonth).sort((a,b) => a.month.localeCompare(b.month)),
+    sourceData: Object.values(bySource).sort((a,b) => b.count - a.count).slice(0,10),
+    typeData: Object.values(byType).sort((a,b) => b.count - a.count),
+    purposeData: Object.values(byPurpose).sort((a,b) => b.count - a.count),
+    paymentData: Object.values(byPayment).sort((a,b) => b.count - a.count),
+    readinessData: Object.values(byReadiness).sort((a,b) => b.count - a.count),
+  };
+}
+
+function renderOverview(s) {
+  const el = document.getElementById('tab-overview');
+  const callsTotal = allCalls.length;
+  const callsAnswered = allCalls.filter(c => c.status === 'ANSWER').length;
+  const callsTarget = allCalls.filter(c => c.is_target).length;
+  const callsAvgDur = callsTotal > 0 ? (allCalls.reduce((sum,c) => sum + (c.duration||0), 0) / callsTotal).toFixed(0) : 0;
+
+  el.innerHTML = `
+    <div class="kpi-row">
+      <div class="kpi"><div class="kpi-label">ВСЕГО СДЕЛОК</div><div class="kpi-value">${s.total.toLocaleString()}</div><div class="kpi-sub">${s.active} активных</div></div>
+      <div class="kpi"><div class="kpi-label">ВЫИГРАНО</div><div class="kpi-value" style="color:#22c55e">${s.won.toLocaleString()}</div><div class="kpi-sub">CR ${s.cr}%</div></div>
+      <div class="kpi"><div class="kpi-label">ПРОИГРАНО</div><div class="kpi-value" style="color:#ef4444">${s.lost.toLocaleString()}</div></div>
+      <div class="kpi"><div class="kpi-label">ВЫРУЧКА (выигр.)</div><div class="kpi-value" style="color:#f97316">${fmtP(s.wonRevenue)}</div></div>
+      <div class="kpi"><div class="kpi-label">СРЕДНИЙ ЧЕК</div><div class="kpi-value">${fmtP(s.avgCheck)}</div></div>
+      <div class="kpi"><div class="kpi-label">КЛИЕНТЫ</div><div class="kpi-value" style="color:#06b6d4">${s.uniqueClients.toLocaleString()}</div><div class="kpi-sub">${s.repeatClients} повторных</div></div>
+    </div>
+    <div class="kpi-row">
+      <div class="kpi"><div class="kpi-label">ЗВОНКИ</div><div class="kpi-value" style="color:#8b5cf6">${callsTotal.toLocaleString()}</div><div class="kpi-sub">${callsAnswered} отвечено</div></div>
+      <div class="kpi"><div class="kpi-label">ЦЕЛЕВЫЕ ЗВОНКИ</div><div class="kpi-value" style="color:#14b8a6">${callsTarget.toLocaleString()}</div></div>
+      <div class="kpi"><div class="kpi-label">СР. ДЛИТЕЛЬНОСТЬ</div><div class="kpi-value">${callsAvgDur} сек</div></div>
+    </div>
+    <div class="section-title">Динамика лидов по месяцам</div>
+    <div class="chart-wrap"><canvas id="chartMonthly"></canvas></div>
+    <div class="section-title">ТОП-10 источников</div>
+    <div class="chart-wrap" style="height:350px"><canvas id="chartSources"></canvas></div>
+  `;
+
+  createChart('chartMonthly', {
+    type: 'line',
+    data: {
+      labels: s.monthlyData.map(m => m.month),
+      datasets: [
+        { label: 'Лиды', data: s.monthlyData.map(m => m.leads), borderColor: '#f97316', backgroundColor: 'rgba(249,115,22,0.1)', fill: true, tension: 0.3, pointRadius: 1 },
+        { label: 'Выиграно', data: s.monthlyData.map(m => m.won), borderColor: '#22c55e', backgroundColor: 'rgba(34,197,94,0.1)', fill: true, tension: 0.3, pointRadius: 1 }
+      ]
+    },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#8a8f98', font: { size: 11 } } } }, scales: { x: { ticks: { color: '#5a5f6a', font: { size: 10 } }, grid: { color: '#1a1d24' } }, y: { ticks: { color: '#5a5f6a', font: { size: 10 } }, grid: { color: '#1a1d24' } } } }
+  });
+
+  createChart('chartSources', {
+    type: 'bar',
+    data: {
+      labels: s.sourceData.map(d => d.name),
+      datasets: [{ label: 'Сделки', data: s.sourceData.map(d => d.count), backgroundColor: '#f97316', borderRadius: 4 }]
+    },
+    options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { ticks: { color: '#5a5f6a', font: { size: 10 } }, grid: { color: '#1a1d24' } }, y: { ticks: { color: '#8a8f98', font: { size: 11 } }, grid: { display: false } } } }
+  });
+}
+
+function renderFunnel(s) {
+  const el = document.getElementById('tab-funnel');
+  const maxCount = s.statusData[0]?.count || 1;
+  let html = '<div class="section-title">Воронка продаж — все статусы</div>';
+  s.statusData.forEach((st, i) => {
+    const pct = ((st.count / s.total) * 100).toFixed(1);
+    const color = STATUS_COLORS[st.type] || '#6b7280';
+    html += `<div class="funnel-row" style="animation-delay:${i*30}ms">
+      <div class="funnel-dot" style="background:${color}"></div>
+      <div class="funnel-name">${st.name}</div>
+      <div class="funnel-bar-bg"><div class="funnel-bar" style="width:${(st.count/maxCount)*100}%;background:${color}"></div></div>
+      <div class="funnel-count">${st.count}</div>
+      <div class="funnel-pct">${pct}%</div>
+    </div>`;
+  });
+  html += `<div class="legend-row">
+    <div class="legend-item"><div class="legend-dot" style="background:#3b82f6"></div>В работе</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#22c55e"></div>Выиграно</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#ef4444"></div>Проиграно</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#6b7280"></div>Не в работе</div>
+  </div>`;
+  el.innerHTML = html;
+}
+
+function renderSources(s) {
+  const el = document.getElementById('tab-sources');
+  let rows = '';
+  s.sourceData.forEach(src => {
+    const cr = src.count > 0 ? ((src.won/src.count)*100).toFixed(1) : '0';
+    const crClass = parseFloat(cr) > 5 ? 'cr-good' : 'cr-mid';
+    rows += `<tr>
+      <td style="color:#e8eaed;font-weight:500">${src.name}</td>
+      <td>${src.count}</td>
+      <td style="color:#22c55e">${src.won}</td>
+      <td><span class="cr-badge ${crClass}">${cr}%</span></td>
+      <td style="color:#f97316">${fmtP(src.revenue)}</td>
+    </tr>`;
+  });
+
+  el.innerHTML = `
+    <div class="section-title">Конверсия по источникам</div>
+    <table><thead><tr><th>Источник</th><th>Сделки</th><th>Выиграно</th><th>CR %</th><th>Выручка</th></tr></thead><tbody>${rows}</tbody></table>
+    <div class="section-title">Распределение по источникам</div>
+    <div class="chart-wrap" style="height:320px"><canvas id="chartSourcesPie"></canvas></div>
+  `;
+
+  createChart('chartSourcesPie', {
+    type: 'doughnut',
+    data: {
+      labels: s.sourceData.map(d => d.name),
+      datasets: [{ data: s.sourceData.map(d => d.count), backgroundColor: COLORS.slice(0, s.sourceData.length), borderWidth: 0 }]
+    },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { color: '#8a8f98', font: { size: 11 }, padding: 12 } } } }
+  });
+}
+
+function renderManagers(s) {
+  const el = document.getElementById('tab-managers');
+  let rows = '';
+  s.managerData.forEach(m => {
+    const crClass = parseFloat(m.cr) > 5 ? 'cr-good' : 'cr-mid';
+    rows += `<tr>
+      <td style="color:#e8eaed;font-weight:500">${m.name}</td>
+      <td>${m.total}</td>
+      <td style="color:#22c55e">${m.won}</td>
+      <td><span class="cr-badge ${crClass}">${m.cr}%</span></td>
+      <td style="color:#f97316">${fmtP(m.wonRev)}</td>
+    </tr>`;
+  });
+
+  el.innerHTML = `
+    <div class="section-title">Эффективность менеджеров</div>
+    <table><thead><tr><th>Менеджер</th><th>Сделки</th><th>Выиграно</th><th>CR %</th><th>Выручка (выигр.)</th></tr></thead><tbody>${rows}</tbody></table>
+    <div class="section-title">Сделки по менеджерам</div>
+    <div class="chart-wrap" style="height:400px"><canvas id="chartManagers"></canvas></div>
+  `;
+
+  createChart('chartManagers', {
+    type: 'bar',
+    data: {
+      labels: s.managerData.map(m => m.name),
+      datasets: [
+        { label: 'Всего', data: s.managerData.map(m => m.total), backgroundColor: '#3b82f6', borderRadius: 4 },
+        { label: 'Выиграно', data: s.managerData.map(m => m.won), backgroundColor: '#22c55e', borderRadius: 4 }
+      ]
+    },
+    options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#8a8f98', font: { size: 11 } } } }, scales: { x: { ticks: { color: '#5a5f6a', font: { size: 10 } }, grid: { color: '#1a1d24' } }, y: { ticks: { color: '#8a8f98', font: { size: 11 } }, grid: { display: false } } } }
+  });
+}
+
+function renderObjects(s) {
+  const el = document.getElementById('tab-objects');
+  let payCards = '', readCards = '';
+  s.paymentData.forEach((p,i) => {
+    payCards += `<div class="tag-card"><div class="tag-card-label">${p.name}</div><div class="tag-card-value" style="color:${COLORS[i%COLORS.length]}">${p.count}</div></div>`;
+  });
+  s.readinessData.forEach((r,i) => {
+    readCards += `<div class="tag-card"><div class="tag-card-label">${r.name}</div><div class="tag-card-value" style="color:${COLORS[(i+3)%COLORS.length]}">${r.count}</div></div>`;
+  });
+
+  el.innerHTML = `
+    <div class="section-title">Тип объекта</div>
+    <div class="chart-wrap" style="height:280px"><canvas id="chartTypes"></canvas></div>
+    <div class="section-title">Цель покупки</div>
+    <div class="chart-wrap" style="height:250px"><canvas id="chartPurpose"></canvas></div>
+    <div class="section-title">Форма оплаты</div>
+    <div class="tag-cards">${payCards}</div>
+    <div class="section-title">Готовность объекта</div>
+    <div class="tag-cards">${readCards}</div>
+  `;
+
+  createChart('chartTypes', {
+    type: 'doughnut',
+    data: {
+      labels: s.typeData.map(t => t.name),
+      datasets: [{ data: s.typeData.map(t => t.count), backgroundColor: COLORS.slice(0, s.typeData.length), borderWidth: 0 }]
+    },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { color: '#8a8f98', font: { size: 11 }, padding: 10 } } } }
+  });
+
+  createChart('chartPurpose', {
+    type: 'bar',
+    data: {
+      labels: s.purposeData.map(p => p.name),
+      datasets: [{ label: 'Сделки', data: s.purposeData.map(p => p.count), backgroundColor: '#8b5cf6', borderRadius: 4 }]
+    },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { ticks: { color: '#5a5f6a', font: { size: 10 } }, grid: { color: '#1a1d24' } }, y: { ticks: { color: '#5a5f6a', font: { size: 10 } }, grid: { color: '#1a1d24' } } } }
+  });
+}
+
+function renderVisits() {
+  const el = document.getElementById('tab-visits');
+  const v = allVisits;
+  if (!v.length) { el.innerHTML = '<p style="color:#5a5f6a;padding:40px 0;text-align:center">Нет данных по визитам</p>'; return; }
+
+  const mobile = v.filter(vi => { try { const d = typeof vi.device === 'string' ? JSON.parse(vi.device) : vi.device; return d && d.is_mobile; } catch { return false; } }).length;
+  const desktop = v.length - mobile;
+
+  const byCountry = {};
+  v.forEach(vi => { const c = vi.country || 'Не определена'; byCountry[c] = (byCountry[c]||0)+1; });
+  const countryData = Object.entries(byCountry).sort((a,b) => b[1]-a[1]).slice(0,10);
+
+  const byUtm = {};
+  v.forEach(vi => { const s = vi.utm_source || 'direct'; byUtm[s] = (byUtm[s]||0)+1; });
+  const utmData = Object.entries(byUtm).sort((a,b) => b[1]-a[1]).slice(0,8);
+
+  const byLanding = {};
+  v.forEach(vi => { const l = vi.landing_page || 'Не определён'; byLanding[l] = (byLanding[l]||0)+1; });
+  const landingData = Object.entries(byLanding).sort((a,b) => b[1]-a[1]).slice(0,8);
+
+  el.innerHTML = `
+    <div class="kpi-row">
+      <div class="kpi"><div class="kpi-label">ВСЕГО ВИЗИТОВ</div><div class="kpi-value" style="color:#06b6d4">${v.length.toLocaleString()}</div></div>
+      <div class="kpi"><div class="kpi-label">MOBILE</div><div class="kpi-value" style="color:#f97316">${mobile.toLocaleString()}</div><div class="kpi-sub">${((mobile/v.length)*100).toFixed(0)}%</div></div>
+      <div class="kpi"><div class="kpi-label">DESKTOP</div><div class="kpi-value" style="color:#8b5cf6">${desktop.toLocaleString()}</div><div class="kpi-sub">${((desktop/v.length)*100).toFixed(0)}%</div></div>
+    </div>
+    <div class="section-title">География визитов — ТОП-10 стран</div>
+    <div class="chart-wrap"><canvas id="chartCountries"></canvas></div>
+    <div class="section-title">UTM Source</div>
+    <div class="chart-wrap" style="height:250px"><canvas id="chartUtm"></canvas></div>
+    <div class="section-title">Лендинги</div>
+    <div class="chart-wrap" style="height:280px"><canvas id="chartLandings"></canvas></div>
+  `;
+
+  createChart('chartCountries', {
+    type: 'bar',
+    data: { labels: countryData.map(c => c[0]), datasets: [{ label: 'Визиты', data: countryData.map(c => c[1]), backgroundColor: '#06b6d4', borderRadius: 4 }] },
+    options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { ticks: { color: '#5a5f6a', font: { size: 10 } }, grid: { color: '#1a1d24' } }, y: { ticks: { color: '#8a8f98', font: { size: 11 } }, grid: { display: false } } } }
+  });
+
+  createChart('chartUtm', {
+    type: 'bar',
+    data: { labels: utmData.map(u => u[0]), datasets: [{ label: 'Визиты', data: utmData.map(u => u[1]), backgroundColor: '#8b5cf6', borderRadius: 4 }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { ticks: { color: '#5a5f6a', font: { size: 10 } }, grid: { color: '#1a1d24' } }, y: { ticks: { color: '#5a5f6a', font: { size: 10 } }, grid: { color: '#1a1d24' } } } }
+  });
+
+  createChart('chartLandings', {
+    type: 'bar',
+    data: { labels: landingData.map(l => l[0]), datasets: [{ label: 'Визиты', data: landingData.map(l => l[1]), backgroundColor: '#22c55e', borderRadius: 4 }] },
+    options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { ticks: { color: '#5a5f6a', font: { size: 10 } }, grid: { color: '#1a1d24' } }, y: { ticks: { color: '#8a8f98', font: { size: 11 } }, grid: { display: false } } } }
+  });
+}
+
+function renderAll() {
+  const orders = filterOrders();
+  const s = computeStats(orders);
+  document.getElementById('headerMeta').textContent = orders.length.toLocaleString() + ' сделок • ' + allVisits.length.toLocaleString() + ' визитов • ' + allCalls.length.toLocaleString() + ' звонков';
+  renderOverview(s);
+  renderFunnel(s);
+  renderSources(s);
+  renderManagers(s);
+  renderObjects(s);
+  renderVisits();
+}
+
+document.getElementById('tabsBar').addEventListener('click', e => {
+  const tab = e.target.closest('.tab');
+  if (!tab) return;
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  tab.classList.add('active');
+  document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+});
+
+document.getElementById('dateFilters').addEventListener('click', e => {
+  const btn = e.target.closest('.date-btn');
+  if (!btn) return;
+  document.querySelectorAll('.date-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  currentRange = btn.dataset.range;
+  renderAll();
+});
+
+async function init() {
+  const statusEl = document.getElementById('loadingStatus');
+  try {
+    statusEl.textContent = 'Загрузка заказов…';
+    allOrders = await fetchAll('roistat_orders', 'id,name,date_create,date_update,status,status_name,status_type,price,cost,profit,client_id,source,custom_fields,roistat_visit', statusEl);
+
+    statusEl.textContent = 'Загрузка визитов…';
+    allVisits = await fetchAll('roistat_visits', 'id,date,source,landing_page,country,city,utm_source,utm_medium,utm_campaign,device,order_ids', statusEl);
+
+    statusEl.textContent = 'Загрузка звонков…';
+    allCalls = await fetchAll('roistat_calls', 'id,date,caller,callee,duration,status,is_target,source,order_id', statusEl);
+
+    statusEl.textContent = 'Загрузка статусов…';
+    allStatuses = await fetchAll('roistat_statuses', 'id,name,type', statusEl);
+
+    document.getElementById('loadingBlock').style.display = 'none';
+    renderAll();
+  } catch (e) {
+    document.getElementById('loadingBlock').innerHTML = `
+      <div style="background:#1a1015;border:1px solid #7f1d1d;border-radius:12px;padding:24px;max-width:500px;margin:0 auto">
+        <div style="font-weight:600;margin-bottom:8px;color:#fca5a5">Ошибка загрузки</div>
+        <div style="font-size:13px;word-break:break-all;color:#fca5a5">${e.message}</div>
+      </div>`;
+  }
+}
+
+init();
+</script>
+</body>
+</html>
