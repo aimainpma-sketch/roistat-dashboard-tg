@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useReducer } from "react";
 import { addDays } from "date-fns";
 import { getEnrichedOrders, getChannelSpend } from "@/services/enrichedRepository";
 import {
@@ -11,7 +11,7 @@ import {
   computeLanguageSplit,
   generateMarketingInsights,
 } from "@/features/marketing/lib/aggregations";
-import type { LanguageSegment, MarketingFilterState, Grain } from "@/types/dashboard";
+import type { LanguageSegment, MarketingFilterState } from "@/types/dashboard";
 
 function getDefaultDates() {
   const today = new Date();
@@ -20,34 +20,35 @@ function getDefaultDates() {
   return { dateFrom, dateTo };
 }
 
-export function useMarketingData(props?: { dateFrom?: string; dateTo?: string }) {
+function initFilters(props?: { dateFrom?: string; dateTo?: string }): MarketingFilterState {
   const defaults = getDefaultDates();
-  const [dateFrom, setDateFrom] = useState(props?.dateFrom ?? defaults.dateFrom);
-  const [dateTo, setDateTo] = useState(props?.dateTo ?? defaults.dateTo);
-  const [languageFilter, setLanguageFilter] = useState<LanguageSegment | null>(null);
-  const [channelFilter, setChannelFilter] = useState<string | null>(null);
-  const [grain, setGrain] = useState<Grain>("day");
-
-  const filters: MarketingFilterState = useMemo(
-    () => ({ dateFrom, dateTo, grain, channelFilter, languageFilter }),
-    [dateFrom, dateTo, grain, channelFilter, languageFilter],
-  );
-
-  const setFilters = (next: MarketingFilterState) => {
-    setDateFrom(next.dateFrom);
-    setDateTo(next.dateTo);
-    setGrain(next.grain);
-    setChannelFilter(next.channelFilter);
-    setLanguageFilter(next.languageFilter);
+  return {
+    dateFrom: props?.dateFrom ?? defaults.dateFrom,
+    dateTo: props?.dateTo ?? defaults.dateTo,
+    grain: "day",
+    channelFilter: null,
+    languageFilter: null,
   };
+}
+
+function filtersReducer(state: MarketingFilterState, action: Partial<MarketingFilterState>): MarketingFilterState {
+  return { ...state, ...action };
+}
+
+export function useMarketingData(props?: { dateFrom?: string; dateTo?: string }) {
+  const [filters, dispatch] = useReducer(filtersReducer, props, initFilters);
+
+  const setFilters = useCallback((next: MarketingFilterState) => dispatch(next), []);
+  const setLanguageFilter = useCallback((v: LanguageSegment | null) => dispatch({ languageFilter: v }), []);
+  const setChannelFilter = useCallback((v: string | null) => dispatch({ channelFilter: v }), []);
 
   const ordersQuery = useQuery({
-    queryKey: ["enriched-orders", dateFrom, dateTo, languageFilter],
+    queryKey: ["enriched-orders", filters.dateFrom, filters.dateTo, filters.languageFilter],
     queryFn: () => getEnrichedOrders(filters),
   });
 
   const spendQuery = useQuery({
-    queryKey: ["channel-spend", dateFrom, dateTo],
+    queryKey: ["channel-spend", filters.dateFrom, filters.dateTo],
     queryFn: () => getChannelSpend(filters),
   });
 

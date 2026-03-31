@@ -1,4 +1,4 @@
-import { startTransition, useMemo, useState } from "react";
+import { startTransition, useCallback, useMemo, useState } from "react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, CartesianGrid, Legend } from "recharts";
 import { AppShell } from "@/components/AppShell";
 import { WidgetCard } from "@/components/widgets/WidgetCard";
@@ -63,13 +63,13 @@ export function MarketingDashboardPage() {
   const [sortCol, setSortCol] = useState<string>("leads");
   const [sortAsc, setSortAsc] = useState(false);
 
-  const toggleChannel = (ch: string) => {
+  const toggleChannel = useCallback((ch: string) => {
     setExpandedChannels(prev => {
       const next = new Set(prev);
       if (next.has(ch)) next.delete(ch); else next.add(ch);
       return next;
     });
-  };
+  }, []);
 
   // Sub-source data for expanded channels
   const subSourceMap = useMemo(() => {
@@ -91,15 +91,18 @@ export function MarketingDashboardPage() {
     return sorted;
   }, [channelSummaries, sortCol, sortAsc]);
 
-  const handleSort = (col: string) => {
-    if (sortCol === col) setSortAsc(!sortAsc);
-    else { setSortCol(col); setSortAsc(false); }
-  };
+  const handleSort = useCallback((col: string) => {
+    setSortCol(prev => {
+      if (prev === col) { setSortAsc(a => !a); return prev; }
+      setSortAsc(false);
+      return col;
+    });
+  }, []);
 
-  const openDealPopup = (channel: string, stage: FunnelStage) => {
+  const openDealPopup = useCallback((channel: string, stage: FunnelStage) => {
     const deals = filterDealsByStage(orders, channel, stage);
     setDealPopup({ channel, stage: STAGE_LABELS[stage], deals });
-  };
+  }, [orders]);
 
   const totals = useMemo(() => {
     const t = { spend: 0, leads: 0, mqlt: 0, mqls: 0, sql: 0, meetingSet: 0, meetingDone: 0, sales: 0, revenue: 0, grossMargin: 0 };
@@ -126,18 +129,18 @@ export function MarketingDashboardPage() {
     };
   }, [channelSummaries]);
 
-  const allRejections = rejectionBreakdown.reduce(
-    (acc, ch) => {
+  const allRejections = useMemo(() => {
+    const result: { reason: string; count: number }[] = [];
+    for (const ch of rejectionBreakdown) {
       for (const r of ch.reasons) {
-        const existing = acc.find((x) => x.reason === r.reason);
+        const existing = result.find((x) => x.reason === r.reason);
         if (existing) existing.count += r.count;
-        else acc.push({ ...r });
+        else result.push({ reason: r.reason, count: r.count });
       }
-      return acc;
-    },
-    [] as { reason: string; count: number }[],
-  );
-  allRejections.sort((a, b) => b.count - a.count);
+    }
+    result.sort((a, b) => b.count - a.count);
+    return result;
+  }, [rejectionBreakdown]);
 
   return (
     <AppShell
@@ -149,9 +152,7 @@ export function MarketingDashboardPage() {
           <DateRangeToolbar
             filters={filters}
             onChange={(next) => {
-              startTransition(() =>
-                setFilters({ ...next, languageFilter: filters.languageFilter }),
-              );
+              startTransition(() => setFilters({ ...next, languageFilter: filters.languageFilter }));
             }}
             onRefresh={() => {}}
           />
