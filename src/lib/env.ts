@@ -6,6 +6,8 @@ export const env = {
   basePath: import.meta.env.VITE_APP_BASE_PATH?.trim() ?? fallbackBasePath,
   demoMode: import.meta.env.VITE_DEMO_MODE === "true",
   accessPassword: import.meta.env.VITE_ACCESS_PASSWORD?.trim() ?? "",
+  roistatApiKey: import.meta.env.VITE_ROISTAT_API_KEY?.trim() ?? "",
+  roistatProject: import.meta.env.VITE_ROISTAT_PROJECT?.trim() ?? "",
 };
 
 export const isSupabaseConfigured = Boolean(env.supabaseUrl && env.supabaseAnonKey);

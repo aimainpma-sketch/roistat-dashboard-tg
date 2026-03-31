@@ -27,13 +27,6 @@ type OrderRowWithCF = {
   custom_fields: Record<string, unknown> | null;
 };
 
-type AnalyticsSpendRow = {
-  report_date: string;
-  source: string | null;
-  marketing_cost: number | null;
-  raw_data: unknown;
-};
-
 // ---------------------------------------------------------------------------
 // Reuse helpers from main dashboard repository
 // ---------------------------------------------------------------------------
@@ -299,53 +292,108 @@ async function fetchEnrichedOrders(
 }
 
 // ---------------------------------------------------------------------------
-// Channel spend from roistat_analytics
+// Channel spend from Roistat API (direct call)
+// Maps marker_level_1 source keys to "Каналы общ" channel names
 // ---------------------------------------------------------------------------
+const SOURCE_KEY_TO_CHANNEL: Record<string, string> = {
+  // Авито
+  avito: "Авито", avito11: "Авито", avito24: "Авито",
+  avito_krim: "Авито", avito_phuket: "Авито",
+  // Директ
+  direct27: "Директ",
+  // Facebook / Meta
+  facebook28: "Facebook", facebook23: "Facebook", facebook: "Facebook",
+  fb: "Facebook",
+  // Google
+  google: "Google Ads", google17: "Google Ads",
+  "google-ads-sw": "Google Ads", "google-ads-yr": "Ютуб",
+  // Prian
+  prian: "Приан",
+};
+
+function sourceKeyToChannel(key: string, title: string): string {
+  // Direct lookup
+  const lower = key.toLowerCase();
+  if (SOURCE_KEY_TO_CHANNEL[lower]) return SOURCE_KEY_TO_CHANNEL[lower];
+
+  // Pattern matching on key and title
+  const t = title.toLowerCase();
+  if (lower.includes("avito") || t.includes("авито")) return "Авито";
+  if (lower.includes("facebook") || lower.includes("fb") || lower.includes("meta") || t.includes("facebook") || t.includes("чернова вика") || t.includes("fb ")) return "Facebook";
+  if (lower.includes("direct") || t.includes("пхукет инна") || t.includes("пхукет иван") || t.includes("директ")) return "Директ";
+  if (lower.includes("google-ads-yr") || t.includes("ютуб")) return "Ютуб";
+  if (lower.includes("google") || t.includes("google")) return "Google Ads";
+  if (lower.includes("prian") || t.includes("приан")) return "Приан";
+  if (lower.includes("vk") || t.includes("vk")) return "VK";
+  if (lower.includes("homesoverseas") || t.includes("homesoverseas")) return "Homesoverseas";
+
+  return title || "Неизвестный канал";
+}
+
+type RoistatAnalyticsItem = {
+  metrics: { metric_name: string; value: number }[];
+  dimensions: {
+    marker_level_1?: { value: string; title: string };
+  };
+};
+
+type RoistatAnalyticsResponse = {
+  status?: string;
+  data?: Array<{
+    dateFrom?: string;
+    dateTo?: string;
+    items?: RoistatAnalyticsItem[];
+  }>;
+};
+
 async function fetchChannelSpend(
   startDate: string,
   endDate: string,
 ): Promise<ChannelDateSpend[]> {
-  const rows = await fetchPublicRows<AnalyticsSpendRow>(
-    "roistat_analytics",
-    "report_date,source,marketing_cost,raw_data",
-    [
-      ["report_date", `gte.${startDate}`],
-      ["report_date", `lte.${endDate}`],
-    ],
-    "report_date.asc",
-  );
+  if (!env.roistatApiKey || !env.roistatProject) return [];
 
-  const spendMap = new Map<string, ChannelDateSpend>();
+  try {
+    const response = await fetch("https://cloud.roistat.com/api/v1/project/analytics/data", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        key: env.roistatApiKey,
+        project: env.roistatProject,
+        period: { from: startDate, to: endDate },
+        metrics: ["marketing_cost"],
+        dimensions: ["marker_level_1"],
+      }),
+    });
 
-  for (const row of rows) {
-    // For analytics rows we only have source, no custom_fields — use deriveChannel with null fields
-    const channel = deriveChannel(row.source, null);
-    let spend = Number(row.marketing_cost ?? 0);
+    if (!response.ok) return [];
+    const json = (await response.json()) as RoistatAnalyticsResponse;
+    if (json.status === "error" || !json.data) return [];
 
-    // Try to extract from raw_data metrics if marketing_cost is 0
-    if (spend === 0 && row.raw_data && typeof row.raw_data === "object" && !Array.isArray(row.raw_data)) {
-      const rd = row.raw_data as Record<string, unknown>;
-      const metrics = "metrics" in rd ? rd.metrics : null;
-      if (Array.isArray(metrics)) {
-        const mc = metrics.find(
-          (m: unknown) => m && typeof m === "object" && "metric_name" in (m as Record<string, unknown>) && (m as Record<string, unknown>).metric_name === "marketing_cost"
-        ) as { value: number } | undefined;
-        spend = mc?.value ?? 0;
+    const spendMap = new Map<string, ChannelDateSpend>();
+    // API returns one period block when no period_grouping
+    const period = json.data[0];
+    const reportDate = period?.dateFrom ?? startDate;
+
+    for (const item of period?.items ?? []) {
+      const dim = item.dimensions.marker_level_1;
+      if (!dim) continue;
+      const channel = sourceKeyToChannel(dim.value, dim.title);
+      const spend = item.metrics.find(m => m.metric_name === "marketing_cost")?.value ?? 0;
+      if (spend <= 0) continue;
+
+      const key = `${reportDate}::${channel}`;
+      const existing = spendMap.get(key);
+      if (existing) {
+        existing.spend += spend;
+      } else {
+        spendMap.set(key, { reportDate, channel, spend });
       }
     }
 
-    if (spend <= 0) continue;
-
-    const key = `${row.report_date}::${channel}`;
-    const existing = spendMap.get(key);
-    if (existing) {
-      existing.spend += spend;
-    } else {
-      spendMap.set(key, { reportDate: row.report_date, channel, spend });
-    }
+    return [...spendMap.values()];
+  } catch {
+    return [];
   }
-
-  return [...spendMap.values()];
 }
 
 // ---------------------------------------------------------------------------

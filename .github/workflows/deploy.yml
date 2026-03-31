@@ -37,6 +37,8 @@ jobs:
           VITE_SUPABASE_ANON_KEY: sb_publishable_7Xp6LoL6pA-s4ZNCaj74XQ_We4KUdHB
           VITE_ACCESS_PASSWORD: emilyinparis
           VITE_APP_BASE_PATH: /roistat-dashboard-tg/
+          VITE_ROISTAT_API_KEY: af91cd632d81fe4c223074410788484d
+          VITE_ROISTAT_PROJECT: "291876"
         run: npm run build
 
       - name: Setup Pages
