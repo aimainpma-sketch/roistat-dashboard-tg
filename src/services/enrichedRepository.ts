@@ -370,9 +370,10 @@ async function fetchChannelSpend(
     if (json.status === "error" || !json.data) return [];
 
     const spendMap = new Map<string, ChannelDateSpend>();
-    // API returns one period block when no period_grouping
     const period = json.data[0];
-    const reportDate = period?.dateFrom ?? startDate;
+    // Use the middle of the requested range as reportDate (YYYY-MM-DD format)
+    // so it passes date filtering in aggregations
+    const reportDate = endDate;
 
     for (const item of period?.items ?? []) {
       const dim = item.dimensions.marker_level_1;
