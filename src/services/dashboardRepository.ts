@@ -79,6 +79,11 @@ type RoistatCostRow = {
   cost: number | null;
   raw_data: Json | null;
 };
+type RoistatSourceRow = {
+  id: string;
+  display_name: string | null;
+  raw_data: Json | null;
+};
 type SourceProfile = {
   sourceKey: string;
   channel: string;
@@ -339,7 +344,7 @@ function isMqlStatus(statusName?: string | null) {
 }
 
 function isMeetingStatus(statusName?: string | null) {
-  return /zoom scheduled|meeting scheduled|встреча назнач|созвон назнач|zoom/i.test(cleanLabel(statusName));
+  return /zoom scheduled|meeting scheduled|встреча назнач|созвон назнач|показ назнач|zoom/i.test(cleanLabel(statusName));
 }
 
 function isSaleStatus(statusType?: string | null, price?: number | null, profit?: number | null) {
@@ -595,8 +600,170 @@ function buildGrossMarginMixFromFacts(filters: DashboardFilterState, facts: Sour
     .sort((left, right) => right.value - left.value);
 }
 
-async function getPublicAnalyticsFacts(filters: DashboardFilterState): Promise<SourceFact[] | null> {
-  if (!supabase || !env.supabaseUrl || !env.supabaseAnonKey) {
+// ---------------------------------------------------------------------------
+// Source profile cache (roistat_sources catalog, refreshed every 5 min)
+// ---------------------------------------------------------------------------
+let sourceProfileCache: { map: Map<string, SourceProfile>; loadedAt: number } | null = null;
+const SOURCE_CACHE_TTL = 5 * 60 * 1000;
+
+function profileFromSourceRow(row: RoistatSourceRow): { profile: SourceProfile; aliases: Array<string | null | undefined> } | null {
+  const raw = row.raw_data;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return null;
+  }
+
+  const sourceStr = "source" in raw ? String(raw.source ?? "") : "";
+  const title = "title" in raw ? cleanLabel(String(raw.title ?? "")) : "";
+  if (!sourceStr && !title) {
+    return null;
+  }
+
+  const parts = sourceStr.split("_").filter(Boolean);
+  const channel = deriveChannel(parts[0], title, row.display_name);
+  const levelLabels = [title].filter(Boolean);
+  const profile = createProfile(channel, levelLabels, `source:${row.id}`);
+
+  return {
+    profile,
+    aliases: [row.id, sourceStr, row.display_name, title],
+  };
+}
+
+async function fetchVisitProfiles(startDate: string, endDate: string): Promise<Map<string, SourceProfile>> {
+  const aliasMap = new Map<string, SourceProfile>();
+
+  const rows = await fetchPublicRows<RoistatVisitRow>(
+    "roistat_visits",
+    "id,date,source,utm_source,utm_medium,utm_campaign,utm_term,utm_content,raw_data",
+    [
+      ["date", `gte.${startDate}`],
+      ["date", `lte.${endDate}T23:59:59`],
+    ],
+    "date.asc",
+  );
+
+  for (const row of rows) {
+    const { profile, aliases } = profileFromVisit(row);
+    registerProfile(aliasMap, profile, aliases);
+  }
+
+  return aliasMap;
+}
+
+async function fetchSourceProfiles(): Promise<Map<string, SourceProfile>> {
+  if (sourceProfileCache && Date.now() - sourceProfileCache.loadedAt < SOURCE_CACHE_TTL) {
+    return sourceProfileCache.map;
+  }
+
+  const aliasMap = new Map<string, SourceProfile>();
+
+  const rows = await fetchPublicRows<RoistatSourceRow>(
+    "roistat_sources",
+    "id,display_name,raw_data",
+    [],
+    "id.asc",
+  );
+
+  for (const row of rows) {
+    const result = profileFromSourceRow(row);
+    if (result) {
+      registerProfile(aliasMap, result.profile, result.aliases);
+    }
+  }
+
+  sourceProfileCache = { map: aliasMap, loadedAt: Date.now() };
+  return aliasMap;
+}
+
+// ---------------------------------------------------------------------------
+// Order-based fact derivation
+// ---------------------------------------------------------------------------
+async function fetchOrderFacts(
+  aliasMap: Map<string, SourceProfile>,
+  startDate: string,
+  endDate: string,
+): Promise<Map<string, SourceFact>> {
+  const facts = new Map<string, SourceFact>();
+
+  const rows = await fetchPublicRows<RoistatOrderRow>(
+    "roistat_orders",
+    "date_create,source,status_name,status_type,price,profit",
+    [
+      ["date_create", `gte.${startDate}`],
+      ["date_create", `lte.${endDate}T23:59:59`],
+    ],
+    "date_create.asc",
+  );
+
+  for (const row of rows) {
+    const profile = resolveProfile(aliasMap, row.source);
+    const reportDate = orderDate(row.date_create);
+    const key = getFactKey(reportDate, profile.sourceKey);
+
+    if (!facts.has(key)) {
+      facts.set(key, createEmptyFact(reportDate, profile));
+    }
+
+    const fact = facts.get(key)!;
+    fact.leads += 1;
+
+    if (isMqlStatus(row.status_name)) {
+      fact.mqlt += 1;
+    }
+    if (isMeetingStatus(row.status_name)) {
+      fact.meetingsScheduled += 1;
+    }
+
+    const isCanceled = cleanLabel(row.status_type).toLowerCase() === "canceled";
+    if (!isCanceled && isSaleStatus(row.status_type, row.price, row.profit)) {
+      fact.sales += 1;
+      fact.revenue += Number(row.price ?? 0);
+      fact.grossMargin += Number(row.profit ?? 0);
+    }
+  }
+
+  return facts;
+}
+
+// ---------------------------------------------------------------------------
+// Analytics spend (small table, only contributes marketing_cost)
+// ---------------------------------------------------------------------------
+async function fetchAnalyticsSpend(
+  startDate: string,
+  endDate: string,
+): Promise<Map<string, { profile: SourceProfile; spend: number }>> {
+  const spendMap = new Map<string, { profile: SourceProfile; spend: number }>();
+
+  const rows = await fetchPublicRows<RoistatAnalyticsRow>(
+    "roistat_analytics",
+    "report_date,source,source_level_2,source_level_3,marketing_cost,leads,sales,revenue,profit,raw_data",
+    [
+      ["report_date", `gte.${startDate}`],
+      ["report_date", `lte.${endDate}`],
+    ],
+    "report_date.asc",
+  );
+
+  for (const row of rows) {
+    const { profile } = profileFromAnalytics(row);
+    const key = getFactKey(row.report_date, profile.sourceKey);
+    const spend = getAnalyticsSpend(row);
+    const existing = spendMap.get(key);
+    if (existing) {
+      existing.spend += spend;
+    } else {
+      spendMap.set(key, { profile, spend });
+    }
+  }
+
+  return spendMap;
+}
+
+// ---------------------------------------------------------------------------
+// Unified fact assembly: orders + visits + sources + analytics spend
+// ---------------------------------------------------------------------------
+async function getPublicFacts(filters: DashboardFilterState): Promise<SourceFact[] | null> {
+  if (!env.supabaseUrl || !env.supabaseAnonKey) {
     return null;
   }
 
@@ -604,34 +771,39 @@ async function getPublicAnalyticsFacts(filters: DashboardFilterState): Promise<S
     const startDate = addDays(new Date(`${filters.dateFrom}T00:00:00.000Z`), filters.grain === "day" ? -1 : -7)
       .toISOString()
       .slice(0, 10);
+    const endDate = filters.dateTo;
 
-    const rows = await fetchPublicRows<RoistatAnalyticsRow>(
-      "roistat_analytics",
-      "report_date,source,source_level_2,source_level_3,marketing_cost,leads,sales,revenue,profit,raw_data",
-      [
-        ["report_date", `gte.${startDate}`],
-        ["report_date", `lte.${filters.dateTo}`],
-      ],
-      "report_date.asc",
-    );
+    // Phase 1: build source profile registry
+    const [visitProfiles, sourceProfiles] = await Promise.all([
+      fetchVisitProfiles(startDate, endDate),
+      fetchSourceProfiles(),
+    ]);
 
-    const facts = new Map<string, SourceFact>();
-
-    for (const row of rows) {
-      const { profile } = profileFromAnalytics(row);
-      const key = getFactKey(row.report_date, profile.sourceKey);
-      if (!facts.has(key)) {
-        facts.set(key, createEmptyFact(row.report_date, profile));
-      }
-      const fact = facts.get(key)!;
-      fact.spend       += getAnalyticsSpend(row);
-      fact.leads       += Number(row.leads   ?? 0);
-      fact.sales       += Number(row.sales   ?? 0);
-      fact.revenue     += Number(row.revenue ?? 0);
-      fact.grossMargin += Number(row.profit  ?? 0);
+    // Merge: visits take priority, sources fill gaps
+    const aliasMap = new Map<string, SourceProfile>(sourceProfiles);
+    for (const [alias, profile] of visitProfiles) {
+      aliasMap.set(alias, profile);
     }
 
-    return [...facts.values()];
+    // Phase 2: fetch order facts + analytics spend in parallel
+    const [orderFacts, analyticsSpend] = await Promise.all([
+      fetchOrderFacts(aliasMap, startDate, endDate),
+      fetchAnalyticsSpend(startDate, endDate),
+    ]);
+
+    // Merge analytics spend into order facts
+    for (const [key, { profile, spend }] of analyticsSpend) {
+      if (orderFacts.has(key)) {
+        orderFacts.get(key)!.spend += spend;
+      } else {
+        const reportDate = key.split("::")[0];
+        const fact = createEmptyFact(reportDate, profile);
+        fact.spend = spend;
+        orderFacts.set(key, fact);
+      }
+    }
+
+    return [...orderFacts.values()];
   } catch {
     return null;
   }
@@ -709,7 +881,7 @@ export async function getMetricTree(
     return getDemoMetricTree(metricId, filters, maxDepth);
   }
 
-  const facts = await getPublicAnalyticsFacts(filters);
+  const facts = await getPublicFacts(filters);
   if (facts) {
     return buildMetricTreeFromFacts(metricId, filters, maxDepth, facts);
   }
@@ -735,7 +907,7 @@ export async function getGrossMarginMix(filters: DashboardFilterState): Promise<
     return getDemoGrossMarginMix(filters);
   }
 
-  const facts = await getPublicAnalyticsFacts(filters);
+  const facts = await getPublicFacts(filters);
   if (facts) {
     return buildGrossMarginMixFromFacts(filters, facts);
   }
