@@ -212,6 +212,19 @@ function isQualifiedRejection(reason: string | null): boolean {
 // ---------------------------------------------------------------------------
 // Paginated fetch (same as dashboardRepository)
 // ---------------------------------------------------------------------------
+const MAX_PAGES = 20;
+const FETCH_TIMEOUT = 15_000;
+
+async function fetchWithTimeout(url: URL | string, init: RequestInit, timeoutMs = FETCH_TIMEOUT): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function fetchPublicRows<T>(
   table: string,
   select: string,
@@ -222,13 +235,13 @@ async function fetchPublicRows<T>(
   const rows: T[] = [];
   let offset = 0;
 
-  while (true) {
+  for (let page = 0; page < MAX_PAGES; page++) {
     const url = new URL(`${env.supabaseUrl}/rest/v1/${table}`);
     url.searchParams.set("select", select);
     url.searchParams.set("order", order);
     for (const [key, value] of filters) url.searchParams.append(key, value);
 
-    const response = await fetch(url, {
+    const response = await fetchWithTimeout(url, {
       headers: {
         apikey: env.supabaseAnonKey,
         Authorization: `Bearer ${env.supabaseAnonKey}`,
@@ -237,9 +250,9 @@ async function fetchPublicRows<T>(
       },
     });
     if (!response.ok) throw new Error(`Failed to fetch ${table}: ${response.status}`);
-    const page = (await response.json()) as T[];
-    rows.push(...page);
-    if (page.length < publicPageSize) break;
+    const batch = (await response.json()) as T[];
+    rows.push(...batch);
+    if (batch.length < publicPageSize) break;
     offset += publicPageSize;
   }
   return rows;
@@ -359,7 +372,7 @@ async function fetchChannelSpend(
   if (!env.roistatApiKey || !env.roistatProject) return [];
 
   try {
-    const response = await fetch("https://cloud.roistat.com/api/v1/project/analytics/data", {
+    const response = await fetchWithTimeout("https://cloud.roistat.com/api/v1/project/analytics/data", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -369,7 +382,7 @@ async function fetchChannelSpend(
         metrics: ["marketing_cost"],
         dimensions: ["marker_level_1"],
       }),
-    });
+    }, 10_000);
 
     if (!response.ok) {
       console.warn("[spend] Roistat API response not ok:", response.status);
@@ -414,7 +427,7 @@ async function fetchChannelSpend(
 // ---------------------------------------------------------------------------
 // Cache layer
 // ---------------------------------------------------------------------------
-const CACHE_TTL = 30_000;
+const CACHE_TTL = 5 * 60_000; // 5 minutes — data doesn't change frequently
 
 let ordersCache: { key: string; data: EnrichedOrderFact[]; at: number } | null = null;
 let spendCache: { key: string; data: ChannelDateSpend[]; at: number } | null = null;

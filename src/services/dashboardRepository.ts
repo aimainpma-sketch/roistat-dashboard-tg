@@ -398,6 +398,19 @@ function getFactKey(reportDate: string, sourceKey: string) {
   return `${reportDate}::${sourceKey}`;
 }
 
+const MAX_PAGES = 20; // Safety cap: max 20 000 rows per query
+const FETCH_TIMEOUT = 15_000; // 15 seconds per page request
+
+async function fetchWithTimeout(url: URL | string, init: RequestInit, timeoutMs = FETCH_TIMEOUT): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function fetchPublicRows<T>(
   table: string,
   select: string,
@@ -411,7 +424,7 @@ async function fetchPublicRows<T>(
   const rows: T[] = [];
   let offset = 0;
 
-  while (true) {
+  for (let page = 0; page < MAX_PAGES; page++) {
     const url = new URL(`${env.supabaseUrl}/rest/v1/${table}`);
     url.searchParams.set("select", select);
     url.searchParams.set("order", order);
@@ -419,7 +432,7 @@ async function fetchPublicRows<T>(
       url.searchParams.append(key, value);
     }
 
-    const response = await fetch(url, {
+    const response = await fetchWithTimeout(url, {
       headers: {
         apikey: env.supabaseAnonKey,
         Authorization: `Bearer ${env.supabaseAnonKey}`,
@@ -432,10 +445,10 @@ async function fetchPublicRows<T>(
       throw new Error(`Failed to fetch ${table}: ${response.status}`);
     }
 
-    const page = (await response.json()) as T[];
-    rows.push(...page);
+    const batch = (await response.json()) as T[];
+    rows.push(...batch);
 
-    if (page.length < publicPageSize) {
+    if (batch.length < publicPageSize) {
       break;
     }
 
@@ -764,7 +777,7 @@ async function fetchAnalyticsSpend(
 // Deduplication: concurrent calls with the same filter key share one fetch.
 // ---------------------------------------------------------------------------
 let factsInflight: { key: string; promise: Promise<SourceFact[] | null> } | null = null;
-const FACTS_CACHE_TTL = 30_000; // 30 s
+const FACTS_CACHE_TTL = 5 * 60_000; // 5 minutes
 let factsCache: { key: string; data: SourceFact[]; loadedAt: number } | null = null;
 
 function factsKey(filters: DashboardFilterState) {

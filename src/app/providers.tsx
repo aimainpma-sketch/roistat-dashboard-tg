@@ -5,7 +5,7 @@ import { AuthProvider } from "@/features/auth/AuthProvider";
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 60_000,
+      staleTime: 5 * 60_000, // 5 minutes — avoid redundant refetches
       refetchOnWindowFocus: false,
     },
   },

@@ -97,6 +97,11 @@ export function DashboardPage() {
         </>
       }
     >
+      {bootstrapQuery.isLoading ? (
+        <div className="flex items-center justify-center py-24 text-slate-400">
+          Загрузка данных...
+        </div>
+      ) : (
       <div className="space-y-6">
         <GrossMarginDonut
           data={mixQuery.data ?? []}
@@ -130,6 +135,8 @@ export function DashboardPage() {
           })}
         </section>
       </div>
+
+      )}
 
       <HierarchySettingsDrawer
         open={drawerOpen}
