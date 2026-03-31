@@ -1,6 +1,22 @@
 import { X } from "lucide-react";
 import type { DashboardView, DimensionLevel } from "@/types/dashboard";
 
+const LEVEL_LABEL_OPTIONS = [
+  "Канал",
+  "Источник",
+  "Кампания",
+  "Группа объявлений",
+  "Объявление",
+  "Менеджер",
+  "Ключевое слово",
+  "Город",
+  "Язык",
+  "Объект",
+  "Креатив",
+  "Сегмент",
+  "Подсегмент",
+];
+
 export function HierarchySettingsDrawer({
   open,
   levels,
@@ -21,8 +37,14 @@ export function HierarchySettingsDrawer({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-black/45 backdrop-blur-sm">
-      <div className="glass h-full w-full max-w-xl border-l border-white/10 p-6">
+    <div
+      className="fixed inset-0 z-50 flex justify-end bg-black/45 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        className="glass h-full w-full max-w-xl overflow-y-auto border-l border-white/10 p-6"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="mb-6 flex items-start justify-between gap-4">
           <div>
             <div className="text-sm uppercase tracking-[0.24em] text-slate-500">Настройки</div>
@@ -57,11 +79,22 @@ export function HierarchySettingsDrawer({
                       Активен
                     </label>
                   </div>
-                  <input
-                    className="mt-3 w-full rounded-2xl border border-white/10 bg-white/6 px-4 py-3 text-sm text-white outline-none"
+                  <select
+                    className="mt-3 w-full appearance-none rounded-2xl border border-white/10 bg-white/6 px-4 py-3 text-sm text-white outline-none"
                     value={level.label}
                     onChange={(event) => onLevelChange({ ...level, label: event.target.value })}
-                  />
+                  >
+                    {LEVEL_LABEL_OPTIONS.map((opt) => (
+                      <option key={opt} value={opt} className="bg-slate-800 text-white">
+                        {opt}
+                      </option>
+                    ))}
+                    {!LEVEL_LABEL_OPTIONS.includes(level.label) && (
+                      <option value={level.label} className="bg-slate-800 text-white">
+                        {level.label}
+                      </option>
+                    )}
+                  </select>
                 </div>
               ))}
             </div>

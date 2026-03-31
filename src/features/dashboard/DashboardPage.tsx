@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, startTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, startTransition } from "react";
 import { addDays } from "date-fns";
 import { Settings2 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
@@ -46,11 +46,15 @@ export function DashboardPage() {
     [views],
   );
 
-  const handleLevelChange = (nextLevel: DimensionLevel) => {
-    const next = levels.map((level) => (level.levelIndex === nextLevel.levelIndex ? nextLevel : level));
-    setLevels(next);
-    void saveDimensionLevels(next);
-  };
+  const levelSaveTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const handleLevelChange = useCallback((nextLevel: DimensionLevel) => {
+    setLevels((prev) => {
+      const next = prev.map((level) => (level.levelIndex === nextLevel.levelIndex ? nextLevel : level));
+      clearTimeout(levelSaveTimer.current);
+      levelSaveTimer.current = setTimeout(() => void saveDimensionLevels(next), 600);
+      return next;
+    });
+  }, []);
 
   const handleViewDepthChange = (viewKey: string, depth: number) => {
     const next = views.map((view) =>
