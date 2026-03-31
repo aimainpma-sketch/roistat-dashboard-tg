@@ -46,26 +46,105 @@ function cleanLabel(value?: string | null): string {
   return normalized;
 }
 
-function humanizeSourceToken(value?: string | null): string {
-  const cleaned = cleanLabel(value);
-  if (!cleaned) return "";
-  const n = cleaned.toLowerCase();
-  if (n.includes("avito")) return "Авито";
-  if (n.includes("facebook") || n.startsWith("fb") || n.includes("meta")) return "Facebook";
-  if (n.includes("instagram") || n.startsWith("ig")) return "Instagram";
-  if (n.includes("prian")) return "Prian";
-  if (n.includes("direct") || n.includes("yandex")) return "Директ";
-  if (n.includes("broker")) return "Лид брокера";
-  if (n.includes("smm")) return "SMM";
-  if (n.includes("call")) return "CallDog";
-  if (n.includes("nosource")) return "Без источника";
-  if (n.includes("bot")) return "Роботы";
-  return cleaned.replace(/[_-]+/g, " ").split(/\s+/).map(t => t.charAt(0).toUpperCase() + t.slice(1)).join(" ");
-}
+// ---------------------------------------------------------------------------
+// Channel classification — exact replica of Roistat "Каналы общ" grouping
+// Uses: source (visit source key), lead_source, utm_source, Теги from custom_fields
+// ---------------------------------------------------------------------------
+const AVITO_SOURCES = ["avito", "авито дмитрий пхукет", "авито пхукет андрей орлов", "авито паттайя андрей орлов", "авито крым андрей орлов", "авито дмитрий крым"];
+const AVITO_LEAD_SOURCES = ["avito_krim_andrey", "avito_krim_sokolov", "avito_phuket_andrey", "avito_phuket_sokolov", "авито - александр недвижимость пхукет", "avito_крым", "авито - adamand estate capital", "авито - твой дом на пхукете", "avito_pattai_andrey"];
+const FACEBOOK_SOURCES = ["facebook вика", "чернова вика", "fb", "facebook 3", "facebook алексей никита", "facebook", "meta-ads-vc", "fb арсений", "meta-ads"];
+const DIRECT_SOURCES = ["пхукет инна", "пхукет иван к.", "директ сергей копнов", "пхукет инна new"];
+const GOOGLE_SOURCES = ["tumanov group | таиланд | ru", "google", "google17", "google-ads-sw"];
+const VK_SOURCES = ["vk никита колбаскин", "vk реклама", "vk реклама виктория чернова"];
+const SMM_LEAD_SOURCES = ["лид_insta_бутик", "лид_telegram_консультация", "лид_insta_консультация", "лид_insta_дача", "лид_insta_bay", "лид_insta_лес", "лид_insta_тропики", "лид_insta_сад", "лид_insta_ипотека", "лид_insta_камала", "лид_insta_люкс", "лид_tiktok", "лид_insta", "лид_youtube"];
 
-function deriveChannelFromSource(source?: string | null): string {
-  const channel = humanizeSourceToken(source);
-  return channel || "Неизвестный канал";
+function deriveChannel(
+  source: string | null,
+  fields: Record<string, unknown> | null,
+): string {
+  const src = cleanLabel(source).toLowerCase();
+  const leadSource = cf(fields, "lead_source").toLowerCase();
+  const utmSource = cf(fields, "utm_source").toLowerCase();
+  const tags = cf(fields, "Теги").toLowerCase();
+
+  // Авито повт. (before Авито to match first)
+  if (leadSource.includes("avito-repeat")) return "Авито повт.";
+
+  // Авито
+  if (AVITO_SOURCES.some(s => src === s || src.includes("avito")))
+    return "Авито";
+  if (AVITO_LEAD_SOURCES.some(s => leadSource === s) || leadSource.includes("avito"))
+    return "Авито";
+
+  // Директ
+  if (DIRECT_SOURCES.some(s => src === s))
+    return "Директ";
+  if (leadSource === "inna-yd")
+    return "Директ";
+  if (utmSource.includes("yandex"))
+    return "Директ";
+
+  // Ютуб (before Google Ads — more specific)
+  if (src === "google-ads-yr")
+    return "Ютуб";
+
+  // Google Ads
+  if (GOOGLE_SOURCES.some(s => src === s))
+    return "Google Ads";
+  if (utmSource.includes("google-ads"))
+    return "Google Ads";
+
+  // Facebook / Meta
+  if (FACEBOOK_SOURCES.some(s => src === s))
+    return "Facebook";
+  if (utmSource.includes("meta-ads"))
+    return "Facebook";
+
+  // SMM
+  if (SMM_LEAD_SOURCES.some(s => leadSource === s))
+    return "SMM";
+
+  // Приан
+  if (src.includes("prian") || leadSource.includes("prian"))
+    return "Приан";
+
+  // ДМП (Вантрезалт)
+  if (tags.includes("кц"))
+    return "ДМП (Вантрезалт)";
+
+  // Homesoverseas
+  if (leadSource === "homesoverseas_andrey" || utmSource.includes("homesoverseas"))
+    return "Homesoverseas";
+
+  // VK
+  if (VK_SOURCES.some(s => src === s))
+    return "VK";
+
+  // Сделка удалена
+  if (leadSource.includes("delited-lead"))
+    return "Сделка удалена";
+
+  // Лид клиента
+  if (leadSource.includes("client-lead"))
+    return "Лид клиента";
+
+  // Импорт базы
+  if (leadSource.includes("import-base"))
+    return "Импорт базы";
+
+  // Лид брокера (lead_source contains "broker")
+  if (leadSource.includes("broker") || src.includes("broker"))
+    return "Лид брокера";
+
+  // Fallback — try to identify by common patterns
+  if (src.includes("facebook") || src.includes("fb") || src.includes("meta"))
+    return "Facebook";
+  if (src.includes("google"))
+    return "Google Ads";
+  if (src.includes("avito") || src.includes("авито"))
+    return "Авито";
+
+  return "Неизвестный канал";
 }
 
 // ---------------------------------------------------------------------------
@@ -197,10 +276,11 @@ async function fetchEnrichedOrders(
       cleanLabel(row.status_type).toLowerCase() === "paid" || price > 0 || profit > 0
     );
 
+    const channel = deriveChannel(row.source, fields);
     return {
       reportDate: row.date_create.slice(0, 10),
-      channel: deriveChannelFromSource(row.source),
-      levelLabels: [deriveChannelFromSource(row.source)],
+      channel,
+      levelLabels: [channel],
       language: extractLanguage(fields),
       category: extractCategory(fields),
       manager: extractManager(fields),
@@ -238,7 +318,8 @@ async function fetchChannelSpend(
   const spendMap = new Map<string, ChannelDateSpend>();
 
   for (const row of rows) {
-    const channel = deriveChannelFromSource(row.source);
+    // For analytics rows we only have source, no custom_fields — use deriveChannel with null fields
+    const channel = deriveChannel(row.source, null);
     let spend = Number(row.marketing_cost ?? 0);
 
     // Try to extract from raw_data metrics if marketing_cost is 0
@@ -308,18 +389,22 @@ function applyLanguageFilter(orders: EnrichedOrderFact[], filters: MarketingFilt
   return orders.filter(o => o.language === filters.languageFilter);
 }
 
-// Re-export channel colors for widgets
+// Re-export channel colors for widgets — matches "Каналы общ" grouping
 export const channelColors: Record<string, string> = {
   "Авито": "#4f8fe8",
-  Avito: "#4f8fe8",
-  Facebook: "#5a7ad9",
-  Instagram: "#e77bc0",
+  "Facebook": "#5a7ad9",
+  "Директ": "#ff8e43",
+  "Google Ads": "#34a853",
+  "Ютуб": "#ff0000",
+  "SMM": "#6fe0d1",
+  "Приан": "#4da5aa",
+  "ДМП (Вантрезалт)": "#b388ff",
+  "Homesoverseas": "#42a5f5",
+  "VK": "#4c75a3",
   "Лид брокера": "#89cc4a",
-  Prian: "#4da5aa",
-  SMM: "#6fe0d1",
-  Директ: "#ff8e43",
-  CallDog: "#7ad2ff",
-  "Без источника": "#778195",
+  "Лид клиента": "#66bb6a",
+  "Импорт базы": "#a1887f",
+  "Авито повт.": "#2196f3",
+  "Сделка удалена": "#ef5350",
   "Неизвестный канал": "#778195",
-  Роботы: "#8892aa",
 };
