@@ -9,3 +9,21 @@ coverage
 *.log
 .supabase
 supabase/.temp
+
+# Claude локальное (контекст с секретами — не коммитить)
+.claude/
+
+# Knowledge-base служебные файлы (память проекта — не для публичного репо)
+CLAUDE.md
+Overview.md
+index.md
+log.md
+IDEAS.md
+PLAN.md
+Notes/
+Meetings/
+Tasks/
+*.pen
+Скрины /
+Снимок экрана*.png
+2026_*.png
